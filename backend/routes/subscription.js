@@ -3,24 +3,25 @@ const router = express.Router();
 const subscriptionController = require('../controllers/subscriptionController');
 const auth = require('../middleware/auth');
 
-// Subscription plan routes
-router.get('/plans', subscriptionController.getAvailablePlans);
-router.get('/plans/:id', subscriptionController.getPlanDetails);
+// Create new subscription
+router.post('/', auth, subscriptionController.createSubscription);
 
-// User subscription management
-router.post('/subscribe', auth, subscriptionController.createSubscription);
-router.get('/current', auth, subscriptionController.getCurrentSubscription);
-router.put('/upgrade', auth, subscriptionController.upgradeSubscription);
-router.put('/downgrade', auth, subscriptionController.downgradeSubscription);
-router.post('/cancel', auth, subscriptionController.cancelSubscription);
-router.post('/resume', auth, subscriptionController.resumeSubscription);
+// Get all subscriptions (admin only)
+router.get('/', auth, subscriptionController.getAllSubscriptions);
 
-// API usage tracking
-router.get('/usage', auth, subscriptionController.getUsageStats);
-router.get('/usage/history', auth, subscriptionController.getUsageHistory);
+// Get subscription by ID
+router.get('/:id', auth, subscriptionController.getSubscriptionById);
 
-// Billing and invoices
-router.get('/invoices', auth, subscriptionController.getInvoices);
-router.get('/invoices/:id', auth, subscriptionController.getInvoiceDetails);
+// Get subscriptions by user ID
+router.get('/user/:userId', auth, subscriptionController.getSubscriptionsByUserId);
+
+// Update subscription
+router.put('/:id', auth, subscriptionController.updateSubscription);
+
+// Delete subscription
+router.delete('/:id', auth, subscriptionController.deleteSubscription);
+
+// Increment API usage
+router.post('/api-usage/:apiKey', subscriptionController.incrementApiUsage);
 
 module.exports = router;
