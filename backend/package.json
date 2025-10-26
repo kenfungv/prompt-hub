@@ -1,0 +1,41 @@
+{
+  "name": "prompt-hub-backend",
+  "version": "1.0.0",
+  "description": "Backend API for Prompt Management System with structured storage, categorization, tagging, and version control",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "migrate": "node migrations/run-migrations.js",
+    "seed": "node migrations/seed-data.js",
+    "test": "jest --coverage",
+    "lint": "eslint ."
+  },
+  "keywords": [
+    "prompt",
+    "management",
+    "api",
+    "mongodb",
+    "express",
+    "rest-api",
+    "version-control"
+  ],
+  "author": "kenfungv",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "mongoose": "^8.0.3",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2",
+    "jest": "^29.7.0",
+    "eslint": "^8.56.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}
