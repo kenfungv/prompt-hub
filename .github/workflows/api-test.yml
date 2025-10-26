@@ -1,0 +1,58 @@
+name: API Testing
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  api-test:
+    name: Run API Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install Newman (Postman CLI)
+        run: npm install -g newman newman-reporter-htmlextra
+      
+      - name: Create reports directory
+        run: mkdir -p reports
+      
+      - name: Run Postman Collection
+        run: |
+          newman run backend/postman/collection.json \
+            --reporters cli,htmlextra \
+            --reporter-htmlextra-export reports/api-test-report.html \
+            --bail \
+            --color on
+        continue-on-error: false
+      
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-test-report
+          path: reports/api-test-report.html
+          retention-days: 30
+      
+      - name: Check test results
+        if: failure()
+        run: |
+          echo "❌ API tests failed. Please check the test report for details."
+          exit 1
+      
+      - name: Success notification
+        if: success()
+        run: echo "✅ All API tests passed successfully!"
