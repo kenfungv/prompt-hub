@@ -1,12 +1,13 @@
 const express = require('express');
 const router = express.Router();
-
 const promptController = require('./prompt.controller');
 const categoryController = require('./category.controller');
 const tagController = require('./tag.controller');
 
-// ============= PROMPT ROUTES =============
+// Import history routes
+const historyRoutes = require('../routes/history');
 
+// ============= PROMPT ROUTES =============
 // Basic CRUD operations
 router.post('/prompts', promptController.createPrompt);
 router.get('/prompts', promptController.getPrompts);
@@ -20,7 +21,6 @@ router.get('/prompts/:id/versions', promptController.getVersionHistory);
 router.post('/prompts/:id/versions/:version/rollback', promptController.rollbackToVersion);
 
 // ============= CATEGORY ROUTES =============
-
 // Basic CRUD operations
 router.post('/categories', categoryController.createCategory);
 router.get('/categories', categoryController.getCategories);
@@ -31,7 +31,6 @@ router.put('/categories/:id', categoryController.updateCategory);
 router.delete('/categories/:id', categoryController.deleteCategory);
 
 // ============= TAG ROUTES =============
-
 // Basic CRUD operations
 router.post('/tags', tagController.createTag);
 router.get('/tags', tagController.getTags);
@@ -42,6 +41,10 @@ router.get('/tags/slug/:slug', tagController.getTagBySlug);
 router.put('/tags/:id', tagController.updateTag);
 router.delete('/tags/:id', tagController.deleteTag);
 router.post('/tags/:id/increment', tagController.incrementUsage);
+
+// ============= HISTORY ROUTES =============
+// Mount history routes at /history
+router.use('/history', historyRoutes);
 
 // Health check endpoint
 router.get('/health', (req, res) => {
