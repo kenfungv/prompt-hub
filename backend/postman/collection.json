@@ -1,0 +1,51 @@
+{
+  "info": {
+    "name": "Prompt Hub API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Auto-generated template for backend REST endpoints. Update variables and auth as needed."
+  },
+  "item": [
+    {"name": "Auth", "item": [
+      {"name": "POST /api/auth/register", "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "url": {"raw": "{{baseUrl}}/api/auth/register", "host": ["{{baseUrl}}"], "path": ["api","auth","register"]}, "body": {"mode": "raw", "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"Passw0rd!\",\n  \"name\": \"Tester\"\n}"}}},
+      {"name": "POST /api/auth/login", "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "url": {"raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api","auth","login"]}, "body": {"mode": "raw", "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"Passw0rd!\"\n}"}}}
+    ]},
+    {"name": "Users", "item": [
+      {"name": "GET /api/users/me", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}], "url": {"raw": "{{baseUrl}}/api/users/me", "host": ["{{baseUrl}}"], "path": ["api","users","me"]}}}
+    ]},
+    {"name": "Categories", "item": [
+      {"name": "GET /api/categories", "request": {"method": "GET", "url": {"raw": "{{baseUrl}}/api/categories", "host": ["{{baseUrl}}"], "path": ["api","categories"]}}},
+      {"name": "POST /api/categories", "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"},{"key": "Authorization", "value": "Bearer {{token}}"}], "url": {"raw": "{{baseUrl}}/api/categories", "host": ["{{baseUrl}}"], "path": ["api","categories"]}, "body": {"mode": "raw", "raw": "{\n  \"name\": \"Utilities\"\n}"}}}
+    ]},
+    {"name": "Tags", "item": [
+      {"name": "GET /api/tags", "request": {"method": "GET", "url": {"raw": "{{baseUrl}}/api/tags", "host": ["{{baseUrl}}"], "path": ["api","tags"]}}}
+    ]},
+    {"name": "Prompts", "item": [
+      {"name": "GET /api/prompts", "request": {"method": "GET", "url": {"raw": "{{baseUrl}}/api/prompts", "host": ["{{baseUrl}}"], "path": ["api","prompts"]}}},
+      {"name": "POST /api/prompts", "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"},{"key": "Authorization", "value": "Bearer {{token}}"}], "url": {"raw": "{{baseUrl}}/api/prompts", "host": ["{{baseUrl}}"], "path": ["api","prompts"]}, "body": {"mode": "raw", "raw": "{\n  \"title\": \"My Prompt\",\n  \"content\": \"Explain X\",\n  \"tags\": [\"ai\"]\n}"}}},
+      {"name": "GET /api/prompts/:id", "request": {"method": "GET", "url": {"raw": "{{baseUrl}}/api/prompts/{{promptId}}", "host": ["{{baseUrl}}"], "path": ["api","prompts","{{promptId}}"]}}}
+    ]},
+    {"name": "Prompt Versions", "item": [
+      {"name": "GET /api/prompts/:id/versions", "request": {"method": "GET", "url": {"raw": "{{baseUrl}}/api/prompts/{{promptId}}/versions", "host": ["{{baseUrl}}"], "path": ["api","prompts","{{promptId}}","versions"]}}}
+    ]},
+    {"name": "Payments", "item": [
+      {"name": "POST /api/payments/intent", "request": {"method": "POST", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}], "url": {"raw": "{{baseUrl}}/api/payments/intent", "host": ["{{baseUrl}}"], "path": ["api","payments","intent"]}}}
+    ]},
+    {"name": "Subscriptions", "item": [
+      {"name": "GET /api/subscriptions", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}], "url": {"raw": "{{baseUrl}}/api/subscriptions", "host": ["{{baseUrl}}"], "path": ["api","subscriptions"]}}}
+    ]},
+    {"name": "Transactions", "item": [
+      {"name": "GET /api/transactions", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}], "url": {"raw": "{{baseUrl}}/api/transactions", "host": ["{{baseUrl}}"], "path": ["api","transactions"]}}}
+    ]},
+    {"name": "History", "item": [
+      {"name": "GET /api/history", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}], "url": {"raw": "{{baseUrl}}/api/history", "host": ["{{baseUrl}}"], "path": ["api","history"]}}}
+    ]},
+    {"name": "Webhooks", "item": [
+      {"name": "POST /api/webhooks/stripe", "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "url": {"raw": "{{baseUrl}}/api/webhooks/stripe", "host": ["{{baseUrl}}"], "path": ["api","webhooks","stripe"]}, "body": {"mode": "raw", "raw": "{\n  \"type\": \"payment_intent.succeeded\"\n}"}}}
+    ]}
+  ],
+  "variable": [
+    {"key": "baseUrl", "value": "http://localhost:3000"},
+    {"key": "token", "value": ""},
+    {"key": "promptId", "value": ""}
+  ]
+}
