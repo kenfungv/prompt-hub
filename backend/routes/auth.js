@@ -1,7 +1,52 @@
 const express = require('express');
 const passport = require('passport');
 const router = express.Router();
+const {
+  register,
+  login,
+  getProfile,
+  changePassword
+} = require('../controllers/authController');
 
+// JWT authentication middleware (to be implemented)
+const authenticateJWT = (req, res, next) => {
+  const token = req.header('Authorization')?.replace('Bearer ', '');
+  
+  if (!token) {
+    return res.status(401).json({ error: 'Access denied. No token provided.' });
+  }
+  
+  try {
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    req.user = decoded;
+    next();
+  } catch (error) {
+    res.status(400).json({ error: 'Invalid token.' });
+  }
+};
+
+// @route   POST /auth/register
+// @desc    Register a new user
+// @access  Public
+router.post('/register', register);
+
+// @route   POST /auth/login
+// @desc    Login user
+// @access  Public
+router.post('/login', login);
+
+// @route   GET /auth/profile
+// @desc    Get current user profile
+// @access  Private
+router.get('/profile', authenticateJWT, getProfile);
+
+// @route   PUT /auth/change-password
+// @desc    Change user password
+// @access  Private
+router.put('/change-password', authenticateJWT, changePassword);
+
+// Google OAuth routes
 // @route   GET /auth/google
 // @desc    Redirect to Google OAuth
 // @access  Public
