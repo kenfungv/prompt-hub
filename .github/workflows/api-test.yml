@@ -1,4 +1,5 @@
 name: API Testing
+
 on:
   push:
     branches:
@@ -9,6 +10,7 @@ on:
       - main
       - develop
   workflow_dispatch:
+
 jobs:
   api-test:
     name: Run API Tests
@@ -38,12 +40,12 @@ jobs:
       - name: Install backend dependencies
         working-directory: ./backend
         run: |
-          npm ci || npm install
+          npm install
       
       - name: Install api-tests dependencies
         working-directory: ./api-tests
         run: |
-          npm ci || npm install
+          npm install
       
       - name: Build backend
         working-directory: ./backend
@@ -62,15 +64,15 @@ jobs:
       - name: Wait for backend
         run: |
           echo "Waiting for backend to be ready..."
-          for i in {1..30}; do
-            if curl -f http://localhost:3001/health > /dev/null 2>&1 || curl -f http://localhost:3001 > /dev/null 2>&1; then
+          for i in {1..60}; do
+            if curl -s http://localhost:3001 > /dev/null; then
               echo "Backend is ready!"
               exit 0
             fi
             echo "Attempt $i: Backend not ready yet, waiting..."
             sleep 2
           done
-          echo "Backend failed to start within 60 seconds"
+          echo "Backend failed to start within timeout"
           exit 1
       
       - name: Run API tests
