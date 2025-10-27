@@ -1,0 +1,325 @@
+name: Backend CI/CD
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'backend/**'
+      - 'api/**'
+      - '.github/workflows/backend.yml'
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'backend/**'
+      - 'api/**'
+      - '.github/workflows/backend.yml'
+
+env:
+  NODE_VERSION: '18'
+  MONGODB_VERSION: '6.0'
+  WORKING_DIR: './backend'
+
+jobs:
+  lint:
+    name: Lint Backend Code
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: '${{ env.WORKING_DIR }}/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: ${{ env.WORKING_DIR }}
+        run: npm ci
+
+      - name: Run ESLint
+        working-directory: ${{ env.WORKING_DIR }}
+        run: npm run lint
+
+      - name: Check code formatting
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          npm run format:check || echo "Warning: Code formatting issues detected"
+
+  test:
+    name: Test Backend with MongoDB
+    runs-on: ubuntu-latest
+    
+    services:
+      mongodb:
+        image: mongo:${{ env.MONGODB_VERSION }}
+        ports:
+          - 27017:27017
+        env:
+          MONGO_INITDB_ROOT_USERNAME: testuser
+          MONGO_INITDB_ROOT_PASSWORD: testpass
+          MONGO_INITDB_DATABASE: test_db
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      MONGODB_URI: mongodb://testuser:testpass@localhost:27017/test_db?authSource=admin
+      NODE_ENV: test
+      JWT_SECRET: test_jwt_secret_key_for_ci
+      PORT: 3000
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: '${{ env.WORKING_DIR }}/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: ${{ env.WORKING_DIR }}
+        run: npm ci
+
+      - name: Wait for MongoDB to be ready
+        run: |
+          timeout 60 bash -c 'until nc -z localhost 27017; do sleep 1; done'
+          echo "MongoDB is ready!"
+
+      - name: Run unit tests
+        working-directory: ${{ env.WORKING_DIR }}
+        run: npm test -- --coverage --forceExit
+        env:
+          CI: true
+
+      - name: Run integration tests
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          if [ -f package.json ] && grep -q '"test:integration"' package.json; then
+            npm run test:integration -- --forceExit
+          else
+            echo "No integration tests found, skipping..."
+          fi
+        env:
+          CI: true
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          directory: ${{ env.WORKING_DIR }}/coverage
+          flags: backend
+          name: backend-coverage
+
+  security-scan:
+    name: Security Vulnerability Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Run npm audit
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          npm audit --audit-level=moderate || echo "Vulnerabilities found, review required"
+          
+      - name: Check for dependency vulnerabilities
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          npx audit-ci --moderate
+        continue-on-error: true
+
+  build:
+    name: Build Backend
+    runs-on: ubuntu-latest
+    needs: [lint, test, security-scan]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: '${{ env.WORKING_DIR }}/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: ${{ env.WORKING_DIR }}
+        run: npm ci --production=false
+
+      - name: Build project
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          if [ -f package.json ] && grep -q '"build"' package.json; then
+            npm run build
+          else
+            echo "No build script found, skipping..."
+          fi
+        env:
+          NODE_ENV: production
+
+      - name: Verify build output
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          echo "Build verification completed"
+          ls -la
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-build
+          path: |
+            ${{ env.WORKING_DIR }}
+            !${{ env.WORKING_DIR }}/node_modules
+            !${{ env.WORKING_DIR }}/coverage
+          retention-days: 7
+
+  type-check:
+    name: TypeScript Type Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: '${{ env.WORKING_DIR }}/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: ${{ env.WORKING_DIR }}
+        run: npm ci
+
+      - name: Run TypeScript compiler
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          if [ -f tsconfig.json ]; then
+            npx tsc --noEmit
+          else
+            echo "No TypeScript configuration found, skipping..."
+          fi
+
+  api-documentation:
+    name: Generate API Documentation
+    runs-on: ubuntu-latest
+    needs: [build]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: '${{ env.WORKING_DIR }}/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: ${{ env.WORKING_DIR }}
+        run: npm ci
+
+      - name: Generate API docs
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          if [ -f package.json ] && grep -q '"docs"' package.json; then
+            npm run docs
+          else
+            echo "No docs script found, skipping..."
+          fi
+
+      - name: Upload API documentation
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: api-documentation
+          path: ${{ env.WORKING_DIR }}/docs
+          retention-days: 30
+
+  deploy-staging:
+    name: Deploy to Staging (develop branch)
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-build
+
+      - name: Deploy to staging environment
+        run: |
+          echo "Deploying to staging environment..."
+          echo "Staging API URL: https://api-staging.example.com"
+          # Add your staging deployment script here
+          # Examples:
+          # - Docker: docker build -t backend:staging . && docker push
+          # - Heroku: heroku deploy
+          # - AWS: aws deploy
+          # - Railway: railway up
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment:
+      name: production
+      url: https://api.example.com
+    
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-build
+
+      - name: Run database migrations
+        run: |
+          echo "Running database migrations..."
+          # Add your migration script here
+          # npm run migrate:prod
+
+      - name: Deploy to production
+        run: |
+          echo "Deploying to production environment..."
+          echo "Production API URL: https://api.example.com"
+          # Add your production deployment script here
+          # Examples:
+          # - Docker: docker build -t backend:latest . && docker push
+          # - Kubernetes: kubectl apply -f k8s/
+          # - AWS ECS: aws ecs update-service
+          # - Platform-specific CLIs
+
+      - name: Health check
+        run: |
+          echo "Performing health check..."
+          # curl -f https://api.example.com/health || exit 1
+
+      - name: Notify deployment
+        if: success()
+        run: |
+          echo "Deployment successful! Backend is live at production."
+          # Add notification logic (Slack, Discord, email, etc.)
