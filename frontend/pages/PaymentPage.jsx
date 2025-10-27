@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 
-// Payment utilities (mocked fetchers; replace with real endpoints if available)
+// Helper API calls (replace with your real implementations)
 async function fetchOrders(params = {}) {
   const res = await fetch('/api/payments/orders', {
     method: 'POST',
@@ -60,9 +60,9 @@ function formatAmount(cents, currency = 'USD') {
   }
 }
 
-const PaymentPage = () => {
+export default function PaymentPage() {
   const [plan, setPlan] = useState('pro');
-  const [status, setStatus] = useState(null);
+  const [toast, setToast] = useState(null);
   const [loadingCheckout, setLoadingCheckout] = useState(false);
 
   // Orders state
@@ -83,15 +83,15 @@ const PaymentPage = () => {
   const handleCheckout = async () => {
     try {
       setLoadingCheckout(true);
-      setStatus(null);
+      setToast(null);
       const data = await fetchCheckout(plan);
       if (data?.checkoutUrl) {
         window.location.href = data.checkoutUrl;
       } else {
-        setStatus({ type: 'error', message: data?.message || 'Failed to start checkout.' });
+        setToast({ type: 'error', message: data?.message || 'Failed to start checkout.' });
       }
     } catch (e) {
-      setStatus({ type: 'error', message: 'Network error. Please try again.' });
+      setToast({ type: 'error', message: 'Network error. Please try again.' });
     } finally {
       setLoadingCheckout(false);
     }
@@ -116,22 +116,17 @@ const PaymentPage = () => {
     return () => { ignore = true; };
   }, [query, statusFilter, dateRange, page, pageSize]);
 
-  // Aggregations for visualization (simple KPIs for recent period)
+  // KPIs for current filter window
   const kpis = useMemo(() => {
     const recent = orders;
     const totalVolume = recent.filter(o => o.status === 'paid').reduce((s, o) => s + (o.amount_cents || 0), 0);
     const countPaid = recent.filter(o => o.status === 'paid').length;
     const countPending = recent.filter(o => o.status === 'pending').length;
     const countFailed = recent.filter(o => o.status === 'failed').length;
-    return {
-      totalVolume,
-      countPaid,
-      countPending,
-      countFailed,
-    };
+    return { totalVolume, countPaid, countPending, countFailed };
   }, [orders]);
 
-  const filteredOrders = orders; // server already filters; keep for safety if needed
+  const filteredOrders = orders; // assume server filters
 
   return (
     <div className="min-h-screen bg-gray-50 py-10 px-4">
@@ -154,9 +149,9 @@ const PaymentPage = () => {
             </button>
           ))}
           <div className="md:col-span-3">
-            {status && (
-              <div className={`mt-3 rounded border p-3 text-sm ${status.type === 'error' ? 'border-red-200 bg-red-50 text-red-700' : 'border-green-200 bg-green-50 text-green-700'}`}>
-                {status.message}
+            {toast && (
+              <div className={`mt-3 rounded border p-3 text-sm ${toast.type === 'error' ? 'border-red-200 bg-red-50 text-red-700' : 'border-green-200 bg-green-50 text-green-700'}`}>
+                {toast.message}
               </div>
             )}
             <button
@@ -286,7 +281,6 @@ const PaymentPage = () => {
             </table>
           </div>
 
-          {/* Simple pagination controls */}
           <div className="flex items-center justify-between border-t border-gray-200 bg-gray-50 px-4 py-2">
             <button
               className="rounded border border-gray-300 px-3 py-1 text-sm disabled:opacity-40"
@@ -305,7 +299,6 @@ const PaymentPage = () => {
           </div>
         </div>
 
-        {/* Order details drawer/dialog */}
         {selectedOrder && (
           <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 p-4 md:items-center">
             <div className="w-full max-w-2xl rounded-lg bg-white shadow-lg">
@@ -329,4 +322,5 @@ const PaymentPage = () => {
                 <div>
                   <p className="text-xs text-gray-500">Created</p>
                   <p className="text-sm text-gray-900">{selectedOrder.created_at ? new Date(selectedOrder.created_at).toLocaleString() : '-'}</p>
-               
+                </div>
+                <
