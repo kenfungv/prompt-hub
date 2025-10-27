@@ -7,6 +7,16 @@ const tagController = require('./tag.controller');
 // Import history routes
 const historyRoutes = require('../routes/history');
 
+// Import auth and user routes
+const authRoutes = require('../routes/auth');
+const userRoutes = require('../routes/user');
+
+// ============= AUTHENTICATION ROUTES =============
+router.use('/auth', authRoutes);
+
+// ============= USER ROUTES =============
+router.use('/user', userRoutes);
+
 // ============= PROMPT ROUTES =============
 // Basic CRUD operations
 router.post('/prompts', promptController.createPrompt);
