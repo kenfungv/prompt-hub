@@ -3,7 +3,6 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 require('dotenv').config();
-
 const apiRoutes = require('./api/routes');
 
 // Initialize Express app
@@ -25,6 +24,14 @@ app.use((req, res, next) => {
 // API Routes
 app.use('/api', apiRoutes);
 
+// Performance Monitor Routes
+try {
+  const perfRoutes = require('./routes/performanceMonitorRoutes');
+  app.use('/api/perf', perfRoutes);
+} catch (e) {
+  console.warn('Performance routes not loaded:', e.message);
+}
+
 // Root endpoint
 app.get('/', (req, res) => {
   res.json({
@@ -35,7 +42,15 @@ app.get('/', (req, res) => {
       health: '/api/health',
       prompts: '/api/prompts',
       categories: '/api/categories',
-      tags: '/api/tags'
+      tags: '/api/tags',
+      performance: {
+        health: '/api/perf/health',
+        ingest: '/api/perf/ingest',
+        realtime: '/api/perf/metrics/realtime',
+        query: '/api/perf/metrics/query',
+        aggregate: '/api/perf/metrics/aggregate',
+        exportCsv: '/api/perf/metrics/export.csv'
+      }
     },
     documentation: 'https://github.com/kenfungv/prompt-hub'
   });
@@ -62,7 +77,6 @@ app.use((err, req, res, next) => {
 
 // Database connection
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/prompt-hub';
-
 mongoose.connect(MONGODB_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true
@@ -70,7 +84,7 @@ mongoose.connect(MONGODB_URI, {
   .then(() => {
     console.log('✅ Connected to MongoDB');
     console.log(`📊 Database: ${mongoose.connection.name}`);
-    
+
     // Start server
     app.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
