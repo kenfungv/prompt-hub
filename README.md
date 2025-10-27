@@ -1,97 +1,39 @@
-# prompt-hub API Documentation
+# A/B Testing Module (feature/ab-testing)
 
-This document lists all backend models, their fields, and the corresponding REST API routes with example requests/responses. It also includes seed instructions.
+This branch implements a full A/B testing module with multi-model, multi-prompt parallel runs, custom traffic allocation, automated comparison UI hooks, user rating system, and report generation. Development is split into backend API and frontend app, with stepwise commits and synced documentation/issues.
 
-## Models and Schemas
+## Backend
+- Models: backend/models/ab_test.py
+  - ABTest, ModelConfig, PromptVariant, TrafficAllocation
+  - TestResult with metrics: win rate, cost (USD), generation time (ms), token usage (prompt/completion/total)
+  - AggregateMetrics, ComparisonPair, ABTestReport
+- Controller: backend/controllers/ab_test_controller.py
+  - Lifecycle: create/start/pause/complete
+  - Record results, aggregate metrics (avg, p50/p95/p99), compute win rate and cost KPIs
+  - Create comparison pairs and submit multi-dimensional user ratings
+  - Generate test report with summary, variant performance, winner analysis
+- Routes: backend/routes/ab_test_routes.py (FastAPI)
+  - POST /ab-tests: create test
+  - POST /ab-tests/{id}/start|pause|complete
+  - POST /ab-tests/{id}/aggregate
+  - POST /ab-tests/{id}/report
+  - POST /ab-tests/{id}/results
+  - POST /ab-tests/{id}/compare
+  - POST /ab-tests/rate/{comparison_id}
 
-- User
-  - Fields: username (string), email (string), password (string), tier (enum: Free|Pro|Enterprise), bio (string), isVerified (boolean), createdAt (date)
-  - Example: { "username": "alice", "email": "alice@example.com", "password": "Password123!", "tier": "Free", "bio": "Writer", "isVerified": true }
-- Category
-  - Fields: name (string), slug (string), description (string), createdAt (date)
-  - Example: { "name": "Writing", "slug": "writing", "description": "Prompts for writing" }
-- Tag
-  - Fields: name (string), slug (string)
-  - Example: { "name": "chatgpt", "slug": "chatgpt" }
-- Prompt
-  - Fields: title (string), content (string), author (ObjectId->User), category (ObjectId->Category), tags (ObjectId[]->Tag), price (number), isPublic (boolean), createdAt (date)
-  - Example: { "title": "Blog outline generator", "content": "Create a blog outline about {topic}", "author": "<userId>", "category": "<categoryId>", "tags": ["<tagId>"] }
-- Subscription
-  - Fields: user (ObjectId->User), plan (string), status (enum: active|canceled|past_due), startDate (date), endDate (date|null), renewal (boolean)
-  - Example: { "user": "<userId>", "plan": "Pro", "status": "active" }
-- Payment
-  - Fields: user (ObjectId->User), amount (number), currency (string), provider (string: stripe), status (string), referenceId (string), createdAt (date)
-  - Example: { "user": "<userId>", "amount": 29, "currency": "USD", "provider": "stripe", "status": "succeeded", "referenceId": "pi_test_123" }
-- Transaction
-  - Fields: buyer (ObjectId->User), seller (ObjectId->User), prompt (ObjectId->Prompt), amount (number), currency (string), status (string), createdAt (date)
-  - Example: { "buyer": "<userId>", "seller": "<userId>", "prompt": "<promptId>", "amount": 4.99, "currency": "USD", "status": "completed" }
-- Webhook
-  - Fields: event (string), provider (string), payload (object), processed (boolean), receivedAt (date)
-  - Example: { "event": "payment_intent.succeeded", "provider": "stripe", "payload": {"id":"evt_1"}, "processed": true }
+Storage is injected via DI and to be implemented (DB/JSON). Execution engine for multi-model concurrency will be added next under backend/api.
 
-## Routes Summary
+## Frontend (planned)
+- A/B Test Configurator: define prompt variants, models, traffic allocation
+- Live Dashboard: runs, latencies, costs, token usage, win rate
+- Automated Comparison View: side-by-side outputs, per-dimension user rating, tie support
+- Report Viewer: exportable summary with KPIs and significance placeholders
 
-- Auth: /api/auth
-  - POST /register
-  - POST /login
-- Users: /api/users
-  - GET /me (auth)
-  - PATCH /me (auth)
-- Categories: /api/categories
-  - GET /
-  - POST / (auth, admin)
-  - GET /:id
-  - PATCH /:id (auth, admin)
-  - DELETE /:id (auth, admin)
-- Tags: /api/tags
-  - GET /
-  - POST / (auth, admin)
-  - GET /:id
-  - PATCH /:id (auth, admin)
-  - DELETE /:id (auth, admin)
-- Prompts: /api/prompts
-  - GET / (query: q, tag, category, author, page, limit, sort)
-  - POST / (auth)
-  - GET /:id
-  - PATCH /:id (auth, owner)
-  - DELETE /:id (auth, owner|admin)
-- Payments: /api/payments
-  - POST /intent (auth) — create payment intent
-  - GET /me (auth) — list my payments
-- Subscriptions: /api/subscriptions
-  - GET /plans — list available plans
-  - POST /subscribe (auth)
-  - GET /me (auth)
-  - POST /cancel (auth)
-- Transactions: /api/transactions
-  - GET /me (auth)
-  - POST / (auth)
-- Webhooks: /api/webhooks
-  - POST /stripe — Stripe webhook endpoint
+## Next Steps
+- Implement storage adapter (e.g., SQLite/SQLModel or MongoDB) and DI wiring
+- Implement execution engine for concurrent multi-model runs with traffic allocation
+- Frontend pages/components and API integration
+- CI/CD and data visualization modules
 
-## Request/Response Examples
-
-- Create Prompt (POST /api/prompts)
-  - Request JSON: { "title": "Refactor JS function", "content": "Improve: {code}", "category": "<categoryId>", "tags": ["<tagId>"], "price": 4.99, "isPublic": true }
-  - 201 Response: { "_id": "<promptId>", "title": "Refactor JS function", "author": {"_id": "<userId>", "username":"bob"} }
-
-- Subscribe (POST /api/subscriptions/subscribe)
-  - Request JSON: { "plan": "Pro", "paymentMethodId": "pm_test_123" }
-  - 200 Response: { "status": "active", "plan": "Pro", "renewal": true }
-
-- Purchase Prompt (POST /api/transactions)
-  - Request JSON: { "promptId": "<promptId>" }
-  - 201 Response: { "status": "completed", "amount": 4.99, "currency": "USD" }
-
-## Seeding
-
-- Seed script: backend/seed.js
-- Environment: MONGODB_URI=mongodb://localhost:27017/prompt-hub
-- Run: node backend/seed.js
-- What it seeds: users, categories, tags, prompts, subscriptions, payments, transactions, webhooks; also defines API tiers (Free, Pro, Enterprise).
-
-## Notes
-
-- Authentication: JWT-based (see /api/auth)
-- Pagination and filtering supported on list endpoints where applicable.
-- Field validation and ownership checks enforced in routes/controllers.
+## Issues tracking
+We will open GitHub issues per task and link PRs. See Issues tab for progress.
