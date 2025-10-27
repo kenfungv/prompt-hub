@@ -1,5 +1,4 @@
 name: Backend CI/CD
-
 on:
   push:
     branches:
@@ -18,12 +17,10 @@ on:
       - 'api/**'
       - '.github/workflows/backend.yml'
   workflow_dispatch:
-
 env:
   NODE_VERSION: '18'
   MONGODB_VERSION: '6.0'
   WORKING_DIR: './backend'
-
 jobs:
   lint:
     name: Lint Backend Code
@@ -36,25 +33,24 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version: '18'
           cache: 'npm'
-          cache-dependency-path: '${{ env.WORKING_DIR }}/package-lock.json'
+          cache-dependency-path: './backend/package-lock.json'
       
       - name: Install dependencies
         run: npm ci
-        working-directory: ${{ env.WORKING_DIR }}
+        working-directory: './backend'
       
       - name: Run ESLint
         run: npm run lint
-        working-directory: ${{ env.WORKING_DIR }}
-
+        working-directory: './backend'
   test:
     name: Backend Unit Tests
     runs-on: ubuntu-latest
     
     services:
       mongodb:
-        image: mongo:${{ env.MONGODB_VERSION }}
+        image: mongo:6.0
         ports:
           - 27017:27017
         options: >-
@@ -70,13 +66,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version: '18'
           cache: 'npm'
-          cache-dependency-path: '${{ env.WORKING_DIR }}/package-lock.json'
+          cache-dependency-path: './backend/package-lock.json'
       
       - name: Install dependencies
         run: npm ci
-        working-directory: ${{ env.WORKING_DIR }}
+        working-directory: './backend'
       
       - name: Create .env.test file
         run: |
@@ -84,32 +80,31 @@ jobs:
           echo "MONGODB_URI=mongodb://localhost:27017/prompt_hub_test" >> .env.test
           echo "JWT_SECRET=test-jwt-secret-key" >> .env.test
           echo "PORT=3000" >> .env.test
-        working-directory: ${{ env.WORKING_DIR }}
+        working-directory: './backend'
       
       - name: Run unit tests
         run: npm test
-        working-directory: ${{ env.WORKING_DIR }}
+        working-directory: './backend'
         env:
           CI: true
       
       - name: Generate test coverage
         run: npm run test:coverage
-        working-directory: ${{ env.WORKING_DIR }}
+        working-directory: './backend'
       
       - name: Upload coverage reports
         uses: actions/upload-artifact@v4
         with:
           name: backend-coverage
-          path: ${{ env.WORKING_DIR }}/coverage
+          path: './backend/coverage'
           retention-days: 7
-
   integration-test:
     name: Backend Integration Tests
     runs-on: ubuntu-latest
     
     services:
       mongodb:
-        image: mongo:${{ env.MONGODB_VERSION }}
+        image: mongo:6.0
         ports:
           - 27017:27017
         options: >-
@@ -125,13 +120,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version: '18'
           cache: 'npm'
-          cache-dependency-path: '${{ env.WORKING_DIR }}/package-lock.json'
+          cache-dependency-path: './backend/package-lock.json'
       
       - name: Install dependencies
         run: npm ci
-        working-directory: ${{ env.WORKING_DIR }}
+        working-directory: './backend'
       
       - name: Create .env.test file
         run: |
@@ -139,21 +134,20 @@ jobs:
           echo "MONGODB_URI=mongodb://localhost:27017/prompt_hub_test" >> .env.test
           echo "JWT_SECRET=test-jwt-secret-key" >> .env.test
           echo "PORT=3000" >> .env.test
-        working-directory: ${{ env.WORKING_DIR }}
+        working-directory: './backend'
       
       - name: Run integration tests
         run: npm run test:integration
-        working-directory: ${{ env.WORKING_DIR }}
+        working-directory: './backend'
         env:
           CI: true
-
   api-test:
     name: API Contract Tests
     runs-on: ubuntu-latest
     
     services:
       mongodb:
-        image: mongo:${{ env.MONGODB_VERSION }}
+        image: mongo:6.0
         ports:
           - 27017:27017
         options: >-
@@ -169,13 +163,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version: '18'
           cache: 'npm'
-          cache-dependency-path: '${{ env.WORKING_DIR }}/package-lock.json'
+          cache-dependency-path: './backend/package-lock.json'
       
       - name: Install backend dependencies
         run: npm ci
-        working-directory: ${{ env.WORKING_DIR }}
+        working-directory: './backend'
       
       - name: Create .env file
         run: |
@@ -183,11 +177,11 @@ jobs:
           echo "MONGODB_URI=mongodb://localhost:27017/prompt_hub_test" >> .env
           echo "JWT_SECRET=test-jwt-secret-key" >> .env
           echo "PORT=3000" >> .env
-        working-directory: ${{ env.WORKING_DIR }}
+        working-directory: './backend'
       
       - name: Start backend server
         run: npm start &
-        working-directory: ${{ env.WORKING_DIR }}
+        working-directory: './backend'
       
       - name: Wait for server to start
         run: npx wait-on http://localhost:3000/api/health -t 60000
@@ -199,7 +193,6 @@ jobs:
       - name: Run API contract tests
         run: npm test
         working-directory: ./api-tests
-
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
@@ -211,20 +204,19 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version: '18'
       
       - name: Run npm audit
         run: npm audit --audit-level=moderate
-        working-directory: ${{ env.WORKING_DIR }}
+        working-directory: './backend'
         continue-on-error: true
       
       - name: Check for vulnerable dependencies
         run: npx snyk test --severity-threshold=high
-        working-directory: ${{ env.WORKING_DIR }}
+        working-directory: './backend'
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-
   build:
     name: Build Backend
     runs-on: ubuntu-latest
@@ -237,25 +229,24 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version: '18'
           cache: 'npm'
-          cache-dependency-path: '${{ env.WORKING_DIR }}/package-lock.json'
+          cache-dependency-path: './backend/package-lock.json'
       
       - name: Install dependencies
         run: npm ci
-        working-directory: ${{ env.WORKING_DIR }}
+        working-directory: './backend'
       
       - name: Build project
         run: npm run build
-        working-directory: ${{ env.WORKING_DIR }}
+        working-directory: './backend'
       
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: backend-build
-          path: ${{ env.WORKING_DIR }}/dist
+          path: './backend/dist'
           retention-days: 7
-
   docker:
     name: Build Docker Image
     runs-on: ubuntu-latest
@@ -270,7 +261,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
       
       - name: Build Docker image
-        run: docker build -t prompt-hub-backend:latest -f ${{ env.WORKING_DIR }}/Dockerfile .
+        run: docker build -t prompt-hub-backend:latest -f './backend/Dockerfile' .
       
       - name: Save Docker image
         run: docker save prompt-hub-backend:latest -o backend-image.tar
