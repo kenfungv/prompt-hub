@@ -1,5 +1,4 @@
 name: API Testing
-
 on:
   push:
     branches:
@@ -15,6 +14,7 @@ jobs:
   api-test:
     name: Run API Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     
     services:
       mongodb:
@@ -22,7 +22,7 @@ jobs:
         ports:
           - 27017:27017
         options: >-
-          --health-cmd "mongosh --eval 'db.adminCommand({ping: 1})'"  
+          --health-cmd "mongosh --eval 'db.adminCommand({ping: 1})'"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -35,46 +35,44 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
       
       - name: Install backend dependencies
+        working-directory: ./backend
         run: |
-          cd backend
-          npm install
+          npm ci || npm install
       
-      - name: Create backend .env file
+      - name: Install api-tests dependencies
+        working-directory: ./api-tests
         run: |
-          cd backend
-          echo "NODE_ENV=test" > .env
-          echo "MONGODB_URI=mongodb://localhost:27017/test_db" >> .env
-          echo "JWT_SECRET=test-secret-key-for-ci" >> .env
-          echo "PORT=3000" >> .env
+          npm ci || npm install
       
-      - name: Start backend server
+      - name: Build backend
+        working-directory: ./backend
         run: |
-          cd backend
+          npm run build --if-present
+      
+      - name: Start backend
+        working-directory: ./backend
+        run: |
           npm start &
-          echo $! > server.pid
+        env:
+          PORT: 3001
+          MONGODB_URI: mongodb://localhost:27017/prompt_hub_test
+          NODE_ENV: test
       
-      - name: Wait for backend to be ready
-        run: |
-          timeout 60 bash -c 'until curl -f http://localhost:3000/health; do sleep 2; done'
-      
-      - name: Install API test dependencies
-        run: |
-          cd api-tests
-          npm install
+      - name: Wait for backend
+        uses: jakejarvis/wait-action@v0.1.1
+        with:
+          url: http://localhost:3001
+          timeout: 120
       
       - name: Run API tests
+        working-directory: ./api-tests
         run: |
-          cd api-tests
-          npm test
-      
-      - name: Stop backend server
-        if: always()
-        run: |
-          if [ -f backend/server.pid ]; then
-            kill $(cat backend/server.pid) || true
-          fi
+          npx playwright test
+        env:
+          API_BASE_URL: http://localhost:3001
       
       - name: Upload test results
         if: always()
@@ -82,4 +80,3 @@ jobs:
         with:
           name: api-test-results
           path: api-tests/test-results
-          retention-days: 7
