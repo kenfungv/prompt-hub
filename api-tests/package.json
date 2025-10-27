@@ -1,0 +1,13 @@
+{
+  "name": "api-tests",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "playwright test",
+    "postinstall": "npx playwright install --with-deps"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.2"
+  }
+}
