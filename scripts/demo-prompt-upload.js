@@ -166,13 +166,14 @@ async function run() {
   // simple pool
   let idx = 0;
   async function worker(id) {
-    while (idx < total) {
+    while (true) {
       const my = idx++;
+      if (my >= total) break;
       const item = items[my];
       try {
         const res = await postPrompt(item);
         ok++;
-        results.push({ index: my, title: item.title, status: res.status, id: res.json.id });
+        results.push({ index: my, title: item.title, status: res.status, id: res.json && res.json.id });
         log(`OK [${my + 1}/${total}] ${item.title}`);
       } catch (e) {
         fail++;
@@ -205,7 +206,7 @@ function escapeXml(s = '') {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
+    .replace(/\"/g, '&quot;')
     .replace(/'/g, '&apos;');
 }
 
