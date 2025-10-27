@@ -24,243 +24,258 @@ export type Prompt = {
   visibility?: 'public' | 'private';
   updatedAt?: string;
   tier?: 'free' | 'pro' | 'enterprise';
+  // New UI fields (client-only)
+  likes?: number;
+  liked?: boolean;
+  bookmarked?: boolean;
+  comments?: Array<{ id: string; author: string; text: string; createdAt: string }>; 
 };
 
-const CATEGORIES = ['all', 'Writing', 'Coding', 'Marketing', 'Business', 'Education', 'Creative', 'Analytics', 'Other'] as const;
+const CATEGORIES = ['all','Writing','Coding','Marketing','Business','Education','Creative','Analytics','Other'] as const;
 const PAGE_SIZE_OPTIONS = [12, 24, 48] as const;
+const SORTS = [
+  { key: 'latest', label: 'Latest' },
+  { key: 'popular', label: 'Popular' },
+  { key: 'rating', label: 'Rating' },
+  { key: 'price_low', label: 'Price: Low' },
+  { key: 'price_high', label: 'Price: High' },
+] as const;
 
 const Marketplace: React.FC = () => {
   // State
   const [prompts, setPrompts] = useState<Prompt[]>([]);
   const [filtered, setFiltered] = useState<Prompt[]>([]);
   const [search, setSearch] = useState('');
-  const [category, setCategory] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<'latest' | 'popular' | 'rating'>('latest');
-  const [pageSize, setPageSize] = useState(12);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [category, setCategory] = useState<(typeof CATEGORIES)[number]>('all');
+  const [activeTags, setActiveTags] = useState<string[]>([]);
+  const [sortKey, setSortKey] = useState<(typeof SORTS)[number]['key']>('latest');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(12);
+
+  // Modal state
+  const [isDetailOpen, setDetailOpen] = useState(false);
   const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
-  const [isDetailOpen, setIsDetailOpen] = useState(false);
-  const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // DnD sensors
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    })
-  );
+  // Sensors (DnD)
+  const sensors = useSensors(useSensor(PointerSensor));
 
-  // Fetch prompts
+  // Fetch data
   useEffect(() => {
-    fetchPrompts();
+    const fetchAll = async () => {
+      try {
+        const [promptsRes] = await Promise.all([
+          fetch('/api/prompts'),
+        ]);
+        const promptsData: Prompt[] = await promptsRes.json();
+
+        // Hydrate client-only fields
+        const enriched = promptsData.map(p => ({
+          likes: 0,
+          liked: false,
+          bookmarked: false,
+          comments: [],
+          ...p,
+        }));
+
+        setPrompts(enriched);
+      } catch (e) {
+        console.error('Failed to fetch', e);
+      }
+    };
+    fetchAll();
   }, []);
 
-  const fetchPrompts = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch('/api/prompts');
-      if (!res.ok) throw new Error('Failed to fetch prompts');
-      const data = await res.json();
-      setPrompts(data);
-      setFiltered(data);
-    } catch (err: any) {
-      setError(err.message || 'Error loading prompts');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Derived tag cloud
+  const allTags = useMemo(() => {
+    const map = new Map<string, number>();
+    prompts.forEach(p => p.tags?.forEach(t => map.set(t, (map.get(t) || 0) + 1)));
+    return [...map.entries()].sort((a,b) => b[1]-a[1]).map(([t]) => t).slice(0, 30);
+  }, [prompts]);
 
-  // Filter & sort logic
+  // Filtering + search + category + tag filter
   useEffect(() => {
-    let result = [...prompts];
+    let list = [...prompts];
 
-    // Category filter
-    if (category !== 'all') {
-      result = result.filter((p) => p.category === category);
-    }
-
-    // Search filter
+    if (category !== 'all') list = list.filter(p => p.category === category);
+    if (activeTags.length) list = list.filter(p => activeTags.every(t => p.tags?.includes(t)));
     if (search.trim()) {
       const q = search.toLowerCase();
-      result = result.filter(
-        (p) =>
-          p.title.toLowerCase().includes(q) ||
-          (p.description && p.description.toLowerCase().includes(q)) ||
-          p.tags.some((t) => t.toLowerCase().includes(q))
+      list = list.filter(p =>
+        p.title.toLowerCase().includes(q) ||
+        (p.description || '').toLowerCase().includes(q) ||
+        (p.tags || []).some(t => t.toLowerCase().includes(q))
       );
     }
 
-    // Sort
-    if (sortBy === 'latest') {
-      result.sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
-    } else if (sortBy === 'popular') {
-      result.sort((a, b) => (b.views || 0) - (a.views || 0));
-    } else if (sortBy === 'rating') {
-      result.sort((a, b) => (b.rating || 0) - (a.rating || 0));
-    }
+    // Sorting
+    list.sort((a,b) => {
+      switch (sortKey) {
+        case 'popular': return (b.views || 0) - (a.views || 0);
+        case 'rating': return (b.rating || 0) - (a.rating || 0);
+        case 'price_low': return (a.price || 0) - (b.price || 0);
+        case 'price_high': return (b.price || 0) - (a.price || 0);
+        case 'latest':
+        default:
+          return new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime();
+      }
+    });
 
-    setFiltered(result);
-    setCurrentPage(1);
-  }, [prompts, category, search, sortBy]);
+    setFiltered(list);
+    setPage(1);
+  }, [prompts, search, category, activeTags, sortKey]);
 
   // Pagination
-  const paginatedPrompts = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const pageItems = useMemo(() => {
+    const start = (page - 1) * pageSize;
     return filtered.slice(start, start + pageSize);
-  }, [filtered, currentPage, pageSize]);
+  }, [filtered, page, pageSize]);
 
-  const totalPages = Math.ceil(filtered.length / pageSize);
+  // Handlers
+  const toggleTag = (t: string) => {
+    setActiveTags(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]);
+  };
 
-  // DnD handlers
+  const clearTags = () => setActiveTags([]);
+
+  const openDetail = (p: Prompt) => {
+    setSelectedPrompt(p);
+    setDetailOpen(true);
+  };
+  const closeDetail = () => setDetailOpen(false);
+
+  const onLike = (id: string) => {
+    setPrompts(prev => prev.map(p => p._id === id ? {
+      ...p,
+      liked: !p.liked,
+      likes: (p.likes || 0) + (p.liked ? -1 : 1)
+    } : p));
+    // TODO: POST /api/prompts/:id/like
+  };
+
+  const onBookmark = (id: string) => {
+    setPrompts(prev => prev.map(p => p._id === id ? { ...p, bookmarked: !p.bookmarked } : p));
+    // TODO: POST /api/prompts/:id/bookmark
+  };
+
+  const addComment = async (id: string, text: string) => {
+    if (!text.trim()) return;
+    const newComment = {
+      id: Math.random().toString(36).slice(2),
+      author: 'You',
+      text,
+      createdAt: new Date().toISOString(),
+    };
+    setPrompts(prev => prev.map(p => p._id === id ? { ...p, comments: [newComment, ...(p.comments || [])] } : p));
+    // TODO: POST /api/prompts/:id/comments
+  };
+
+  // DnD reorder (local only)
   const handleDragEnd = (event: any) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-
     setFiltered((items) => {
-      const oldIndex = items.findIndex((i) => i._id === active.id);
-      const newIndex = items.findIndex((i) => i._id === over.id);
+      const oldIndex = items.findIndex(i => i._id === active.id);
+      const newIndex = items.findIndex(i => i._id === over.id);
       return arrayMove(items, oldIndex, newIndex);
     });
   };
 
-  const openDetail = (prompt: Prompt) => {
-    setSelectedPrompt(prompt);
-    setIsDetailOpen(true);
-  };
-
-  const closeDetail = () => {
-    setIsDetailOpen(false);
-    setTimeout(() => setSelectedPrompt(null), 300);
-  };
-
   return (
-    <div className="marketplace-container">
-      {/* Header */}
-      <header className="marketplace-header">
-        <h1>Prompt Marketplace</h1>
-        <p className="subtitle">Discover and share high-quality AI prompts</p>
-      </header>
-
-      {/* Controls */}
-      <div className="marketplace-controls">
-        {/* Search bar */}
-        <div className="search-wrapper">
+    <div className="marketplace">
+      {/* Header actions */}
+      <div className="marketplace-topbar">
+        <div className="search-box">
           <input
-            ref={searchInputRef}
-            type="text"
-            className="search-input"
-            placeholder="Search prompts..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search prompts, tags, descriptions..."
+            aria-label="Search prompts"
           />
           {search && (
-            <button className="clear-search" onClick={() => setSearch('')} aria-label="Clear search">
-              ✕
-            </button>
+            <button className="ghost" onClick={() => setSearch('')} aria-label="Clear search">✕</button>
           )}
         </div>
-
-        {/* Category filter */}
-        <div className="filter-group">
-          <label>Category</label>
-          <select value={category} onChange={(e) => setCategory(e.target.value)} className="filter-select">
-            {CATEGORIES.map((cat) => (
-              <option key={cat} value={cat}>
-                {cat === 'all' ? 'All Categories' : cat}
-              </option>
+        <div className="filters">
+          <div className="categories" role="tablist" aria-label="Categories">
+            {CATEGORIES.map(c => (
+              <button
+                key={c}
+                role="tab"
+                aria-selected={category === c}
+                className={category === c ? 'chip active' : 'chip'}
+                onClick={() => setCategory(c)}
+              >{c}</button>
             ))}
-          </select>
+          </div>
+          <div className="sort">
+            <select value={sortKey} onChange={(e) => setSortKey(e.target.value as any)} aria-label="Sort prompts">
+              {SORTS.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+            </select>
+            <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value) as any)} aria-label="Items per page">
+              {PAGE_SIZE_OPTIONS.map(s => <option key={s} value={s}>{s} / page</option>)}
+            </select>
+          </div>
         </div>
-
-        {/* Sort */}
-        <div className="filter-group">
-          <label>Sort by</label>
-          <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} className="filter-select">
-            <option value="latest">Latest</option>
-            <option value="popular">Most Popular</option>
-            <option value="rating">Highest Rated</option>
-          </select>
-        </div>
-
-        {/* Page size */}
-        <div className="filter-group">
-          <label>Show</label>
-          <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} className="filter-select">
-            {PAGE_SIZE_OPTIONS.map((size) => (
-              <option key={size} value={size}>
-                {size}
-              </option>
+        {!!activeTags.length && (
+          <div className="active-tags">
+            {activeTags.map(t => (
+              <button key={t} className="chip active" onClick={() => toggleTag(t)} aria-pressed>
+                #{t} ✕
+              </button>
             ))}
-          </select>
-        </div>
+            <button className="ghost" onClick={clearTags}>Clear</button>
+          </div>
+        )}
       </div>
 
-      {/* Results info */}
-      <div className="results-info">
-        <span>
-          {filtered.length} {filtered.length === 1 ? 'prompt' : 'prompts'} found
-        </span>
-      </div>
-
-      {/* Loading / Error */}
-      {loading && <div className="loading-state">Loading prompts...</div>}
-      {error && <div className="error-state">{error}</div>}
+      {/* Tag cloud */}
+      {!!allTags.length && (
+        <div className="tag-cloud" aria-label="Popular tags">
+          {allTags.map(t => (
+            <button key={t} className={activeTags.includes(t) ? 'tag active' : 'tag'} onClick={() => toggleTag(t)}>
+              #{t}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Grid */}
-      {!loading && !error && (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={paginatedPrompts.map((p) => p._id)} strategy={rectSortingStrategy}>
-            <div className="prompts-grid">
-              {paginatedPrompts.map((prompt) => (
-                <SortableItem key={prompt._id} id={prompt._id}>
-                  <PromptCard prompt={prompt} onClick={() => openDetail(prompt)} />
-                </SortableItem>
-              ))}
-            </div>
-          </SortableContext>
-        </DndContext>
-      )}
-
-      {/* Empty state */}
-      {!loading && !error && filtered.length === 0 && (
-        <div className="empty-state">
-          <p>No prompts found matching your criteria.</p>
-          <button onClick={() => { setSearch(''); setCategory('all'); }} className="reset-btn">
-            Reset filters
-          </button>
-        </div>
-      )}
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={pageItems.map(i => i._id)} strategy={rectSortingStrategy}>
+          <div className="grid">
+            {pageItems.map(p => (
+              <SortableItem id={p._id} key={p._id}>
+                <PromptCard
+                  prompt={p}
+                  onClick={() => openDetail(p)}
+                  onLike={() => onLike(p._id)}
+                  onBookmark={() => onBookmark(p._id)}
+                />
+              </SortableItem>
+            ))}
+          </div>
+        </SortableContext>
+      </DndContext>
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="pagination">
-          <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} className="page-btn">
-            Previous
-          </button>
-          <span className="page-info">
-            Page {currentPage} of {totalPages}
-          </span>
-          <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="page-btn">
-            Next
-          </button>
-        </div>
-      )}
+      <div className="pagination">
+        <button className="ghost" disabled={page === 1} onClick={() => setPage(1)} aria-label="First page">⏮</button>
+        <button className="ghost" disabled={page === 1} onClick={() => setPage(p => Math.max(1, p-1))} aria-label="Previous page">◀</button>
+        <span className="page-indicator" aria-live="polite">{page} / {totalPages}</span>
+        <button className="ghost" disabled={page === totalPages} onClick={() => setPage(p => Math.min(totalPages, p+1))} aria-label="Next page">▶</button>
+        <button className="ghost" disabled={page === totalPages} onClick={() => setPage(totalPages)} aria-label="Last page">⏭</button>
+      </div>
 
       {/* Detail modal */}
       {isDetailOpen && selectedPrompt && (
         <div className="modal-overlay" onClick={closeDetail}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <button className="modal-close" onClick={closeDetail} aria-label="Close">
-              ✕
-            </button>
+            <button className="modal-close" onClick={closeDetail} aria-label="Close">✕</button>
             <div className="modal-body">
               <h2>{selectedPrompt.title}</h2>
               {selectedPrompt.description && <p className="modal-description">{selectedPrompt.description}</p>}
-              
+
               <div className="modal-meta">
                 {selectedPrompt.category && <span className="meta-badge">{selectedPrompt.category}</span>}
                 {selectedPrompt.rating !== undefined && (
@@ -271,8 +286,8 @@ const Marketplace: React.FC = () => {
 
               {selectedPrompt.tags.length > 0 && (
                 <div className="modal-tags">
-                  {selectedPrompt.tags.map((tag) => (
-                    <span key={tag} className="tag">{tag}</span>
+                  {selectedPrompt.tags.map(tag => (
+                    <button key={tag} className="tag" onClick={() => toggleTag(tag)}>#{tag}</button>
                   ))}
                 </div>
               )}
@@ -289,10 +304,53 @@ const Marketplace: React.FC = () => {
                   )}
                 </div>
               )}
+
+              {/* Actions */}
+              <div className="modal-actions">
+                <button className={selectedPrompt.liked ? 'btn like active' : 'btn like'} onClick={() => onLike(selectedPrompt._id)}>
+                  {selectedPrompt.liked ? '♥' : '♡'} {selectedPrompt.likes || 0}
+                </button>
+                <button className={selectedPrompt.bookmarked ? 'btn bookmark active' : 'btn bookmark'} onClick={() => onBookmark(selectedPrompt._id)}>
+                  {selectedPrompt.bookmarked ? '★ Bookmarked' : '☆ Bookmark'}
+                </button>
+              </div>
+
+              {/* Comments */}
+              <CommentsSection prompt={selectedPrompt} onAdd={(t) => addComment(selectedPrompt._id, t)} />
             </div>
           </div>
         </div>
       )}
+    </div>
+  );
+};
+
+// Local Comments Component (minimalist)
+const CommentsSection: React.FC<{ prompt: Prompt; onAdd: (text: string) => void }> = ({ prompt, onAdd }) => {
+  const [text, setText] = useState('');
+  const list = prompt.comments || [];
+  return (
+    <div className="comments">
+      <h3>Comments</h3>
+      <div className="comment-input">
+        <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Add a comment..." aria-label="Add comment" />
+        <button onClick={() => { onAdd(text); setText(''); }} disabled={!text.trim()} className="btn">Post</button>
+      </div>
+      <ul className="comment-list">
+        {list.length === 0 && <li className="empty">No comments yet.</li>}
+        {list.map(c => (
+          <li key={c.id} className="comment-item">
+            <div className="avatar" aria-hidden>👤</div>
+            <div className="body">
+              <div className="meta">
+                <span className="author">{c.author}</span>
+                <span className="time">{new Date(c.createdAt).toLocaleString()}</span>
+              </div>
+              <p>{c.text}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 };
