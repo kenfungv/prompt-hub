@@ -34,11 +34,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: './backend/package-lock.json'
       
       - name: Install dependencies
-        run: npm ci
+        run: npm install
         working-directory: './backend'
       
       - name: Run ESLint
@@ -67,11 +65,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: './backend/package-lock.json'
       
       - name: Install dependencies
-        run: npm ci
+        run: npm install
         working-directory: './backend'
       
       - name: Create .env.test file
@@ -121,11 +117,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: './backend/package-lock.json'
       
       - name: Install dependencies
-        run: npm ci
+        run: npm install
         working-directory: './backend'
       
       - name: Create .env.test file
@@ -164,11 +158,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: './backend/package-lock.json'
       
       - name: Install backend dependencies
-        run: npm ci
+        run: npm install
         working-directory: './backend'
       
       - name: Create .env file
@@ -187,7 +179,7 @@ jobs:
         run: npx wait-on http://localhost:3000/api/health -t 60000
       
       - name: Install API test dependencies
-        run: npm ci
+        run: npm install
         working-directory: ./api-tests
       
       - name: Run API contract tests
@@ -230,11 +222,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: './backend/package-lock.json'
       
       - name: Install dependencies
-        run: npm ci
+        run: npm install
         working-directory: './backend'
       
       - name: Build project
