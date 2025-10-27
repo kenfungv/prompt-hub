@@ -15,6 +15,17 @@ jobs:
     name: Run API Tests
     runs-on: ubuntu-latest
     
+    services:
+      mongodb:
+        image: mongo:6.0
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand({ping: 1})'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -37,12 +48,13 @@ jobs:
         env:
           NODE_ENV: test
           PORT: 3000
+          MONGODB_URI: mongodb://localhost:27017/prompt-hub-test
       
       - name: Wait for backend to be ready
         run: |
           echo "Waiting for backend server to start..."
           for i in {1..30}; do
-            if curl -s http://localhost:3000/health > /dev/null 2>&1; then
+            if curl -s http://localhost:3000/api/health > /dev/null 2>&1; then
               echo "Backend server is ready!"
               exit 0
             fi
