@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Prompt Hub API
-  version: 0.1.1
+  version: 0.1.2
   description: OpenAPI spec generated from backend/models and routes. Kept in sync with backend/postman/collection.json
 servers:
   - url: http://localhost:3000/api
@@ -22,6 +22,11 @@ tags:
   - name: Health
   - name: Webhooks
   - name: API Keys
+  - name: Forks
+  - name: Comments
+  - name: Markdown
+  - name: Permissions
+  - name: Logs
 components:
   securitySchemes:
     bearerAuth:
@@ -50,201 +55,162 @@ components:
       schema:
         type: string
   schemas:
+    IdParam:
+      type: string
+      description: MongoDB ObjectId
     User:
       type: object
       properties:
-        _id:
-          type: string
-        username:
-          type: string
-        email:
-          type: string
-          format: email
-        avatar:
-          type: string
-          nullable: true
-        role:
-          type: string
-          enum: [user, admin]
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
+        _id: { type: string }
+        username: { type: string }
+        email: { type: string, format: email }
+        avatar: { type: string, nullable: true }
+        role: { type: string, enum: [user, admin] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
     Category:
       type: object
       properties:
-        _id:
-          type: string
-        name:
-          type: string
-        slug:
-          type: string
-        description:
-          type: string
-          nullable: true
+        _id: { type: string }
+        name: { type: string }
+        slug: { type: string }
+        description: { type: string, nullable: true }
     Prompt:
       type: object
       properties:
-        _id:
-          type: string
-        title:
-          type: string
-        content:
-          type: string
-        category:
-          $ref: '#/components/schemas/Category'
+        _id: { type: string }
+        title: { type: string }
+        content: { type: string }
+        category: { $ref: '#/components/schemas/Category' }
         tags:
           type: array
-          items:
-            type: string
-        author:
-          $ref: '#/components/schemas/User'
-        upvotes:
-          type: integer
-        downvotes:
-          type: integer
-        favorites:
-          type: integer
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
+          items: { type: string }
+        author: { $ref: '#/components/schemas/User' }
+        upvotes: { type: integer }
+        downvotes: { type: integer }
+        favorites: { type: integer }
+        forkedFrom: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
     Vote:
       type: object
       properties:
-        userId:
-          type: string
-        promptId:
-          type: string
-        value:
-          type: integer
-          enum: [1, -1]
+        userId: { type: string }
+        promptId: { type: string }
+        value: { type: integer, enum: [1, -1] }
     Favorite:
       type: object
       properties:
-        userId:
-          type: string
-        promptId:
-          type: string
+        userId: { type: string }
+        promptId: { type: string }
     Collection:
       type: object
       properties:
-        _id:
-          type: string
-        name:
-          type: string
-        description:
-          type: string
-          nullable: true
-        owner:
-          $ref: '#/components/schemas/User'
+        _id: { type: string }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        owner: { $ref: '#/components/schemas/User' }
         prompts:
           type: array
-          items:
-            $ref: '#/components/schemas/Prompt'
+          items: { $ref: '#/components/schemas/Prompt' }
     Webhook:
       type: object
       properties:
-        _id:
-          type: string
-        name:
-          type: string
-        url:
-          type: string
-          format: uri
-        secret:
-          type: string
+        _id: { type: string }
+        name: { type: string }
+        url: { type: string, format: uri }
+        secret: { type: string }
         events:
           type: array
-          items:
-            type: string
-        status:
-          type: string
-          enum: [active, inactive]
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
+          items: { type: string }
+        status: { type: string, enum: [active, inactive] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
     WebhookLog:
       type: object
       properties:
-        _id:
-          type: string
-        webhookId:
-          type: string
-        event:
-          type: string
-        statusCode:
-          type: integer
-        success:
-          type: boolean
-        requestBody:
-          type: object
-        responseBody:
-          type: object
-        error:
-          type: string
-          nullable: true
-        createdAt:
-          type: string
-          format: date-time
+        _id: { type: string }
+        webhookId: { type: string }
+        event: { type: string }
+        statusCode: { type: integer }
+        success: { type: boolean }
+        requestBody: { type: object }
+        responseBody: { type: object }
+        error: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
     ApiKey:
       type: object
       properties:
-        _id:
-          type: string
-        userId:
-          type: string
-        name:
-          type: string
-        keyPrefix:
-          type: string
-        status:
-          type: string
-          enum: [active, inactive, revoked]
+        _id: { type: string }
+        userId: { type: string }
+        name: { type: string }
+        keyPrefix: { type: string }
+        status: { type: string, enum: [active, inactive, revoked] }
         permissions:
           type: array
-          items:
-            type: string
+          items: { type: string }
         scopes:
           type: array
-          items:
-            type: string
+          items: { type: string }
         rateLimit:
           type: object
           properties:
-            requestsPerMinute:
-              type: integer
-            requestsPerHour:
-              type: integer
-            requestsPerDay:
-              type: integer
+            requestsPerMinute: { type: integer }
+            requestsPerHour: { type: integer }
+            requestsPerDay: { type: integer }
         usage:
           type: object
           properties:
-            totalRequests:
-              type: integer
-            lastUsedAt:
-              type: string
-              format: date-time
-            requestsToday:
-              type: integer
-            requestsThisHour:
-              type: integer
-            requestsThisMinute:
-              type: integer
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
+            totalRequests: { type: integer }
+            lastUsedAt: { type: string, format: date-time }
+            requestsToday: { type: integer }
+            requestsThisHour: { type: integer }
+            requestsThisMinute: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    Comment:
+      type: object
+      properties:
+        _id: { type: string }
+        promptId: { type: string }
+        author: { $ref: '#/components/schemas/User' }
+        content: { type: string }
+        markdown: { type: boolean, default: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    Fork:
+      type: object
+      properties:
+        _id: { type: string }
+        sourcePromptId: { type: string }
+        newPromptId: { type: string }
+        userId: { type: string }
+        createdAt: { type: string, format: date-time }
+    MarkdownTestResult:
+      type: object
+      properties:
+        input: { type: string }
+        html: { type: string }
+        warnings:
+          type: array
+          items: { type: string }
+    PermissionChange:
+      type: object
+      properties:
+        userId: { type: string }
+        role: { type: string, enum: [user, admin] }
+        changedBy: { type: string }
+        changedAt: { type: string, format: date-time }
+    AuditLog:
+      type: object
+      properties:
+        _id: { type: string }
+        actorId: { type: string }
+        action: { type: string }
+        resourceType: { type: string }
+        resourceId: { type: string }
+        metadata: { type: object }
+        createdAt: { type: string, format: date-time }
 security:
   - bearerAuth: []
 paths:
@@ -263,38 +229,35 @@ paths:
                   status:
                     type: string
                     example: ok
-  # Existing paths omitted for brevity in this edit
-  /webhooks:
+  # Prompts - Forks
+  /prompts/{id}/fork:
     post:
-      tags: [Webhooks]
-      summary: Create webhook
+      tags: [Forks, Prompts]
+      summary: Fork a prompt
       security:
         - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [name, url, events]
-              properties:
-                name: { type: string }
-                url: { type: string, format: uri }
-                events:
-                  type: array
-                  items: { type: string }
-                secret: { type: string }
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
       responses:
         '201':
-          description: Created
+          description: Fork created
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Webhook' }
+              schema: { $ref: '#/components/schemas/Fork' }
+  /prompts/{id}/forks:
     get:
-      tags: [Webhooks]
-      summary: List my webhooks
-      security:
-        - bearerAuth: []
+      tags: [Forks, Prompts]
+      summary: List forks of a prompt
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
       responses:
         '200':
           description: List
@@ -302,210 +265,19 @@ paths:
             application/json:
               schema:
                 type: array
-                items: { $ref: '#/components/schemas/Webhook' }
-  /webhooks/{id}:
+                items: { $ref: '#/components/schemas/Fork' }
+  # Comments
+  /prompts/{id}/comments:
     get:
-      tags: [Webhooks]
-      summary: Get webhook by id
-      security:
-        - bearerAuth: []
+      tags: [Comments]
+      summary: List comments for a prompt
       parameters:
         - name: id
           in: path
           required: true
           schema: { type: string }
-      responses:
-        '200':
-          description: Webhook
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Webhook' }
-    put:
-      tags: [Webhooks]
-      summary: Update webhook
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                name: { type: string }
-                url: { type: string, format: uri }
-                events:
-                  type: array
-                  items: { type: string }
-                status: { type: string, enum: [active, inactive] }
-      responses:
-        '200':
-          description: Updated
-    delete:
-      tags: [Webhooks]
-      summary: Delete webhook
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string }
-      responses:
-        '204': { description: Deleted }
-  /webhooks/{id}/test:
-    post:
-      tags: [Webhooks]
-      summary: Send test event to webhook
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string }
-      responses:
-        '200': { description: Test sent }
-  /webhooks/{id}/trigger:
-    post:
-      tags: [Webhooks]
-      summary: Trigger webhook manually
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string }
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema:
-              type: object
-      responses:
-        '200': { description: Triggered }
-  /webhooks/{id}/logs:
-    get:
-      tags: [Webhooks]
-      summary: Get webhook logs
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string }
-      responses:
-        '200':
-          description: Logs
-          content:
-            application/json:
-              schema:
-                type: array
-                items: { $ref: '#/components/schemas/WebhookLog' }
-  /webhooks/{id}/stats:
-    get:
-      tags: [Webhooks]
-      summary: Get webhook stats
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string }
-      responses:
-        '200':
-          description: Stats
-          content:
-            application/json:
-              schema:
-                type: object
-  /webhooks/events/types:
-    get:
-      tags: [Webhooks]
-      summary: List supported webhook event types
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: Types
-          content:
-            application/json:
-              schema:
-                type: array
-                items: { type: string }
-  /webhooks/{id}/retry/{logId}:
-    post:
-      tags: [Webhooks]
-      summary: Retry a failed webhook delivery
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string }
-        - name: logId
-          in: path
-          required: true
-          schema: { type: string }
-      responses:
-        '200': { description: Retried }
-  /webhooks/{id}/verify:
-    post:
-      tags: [Webhooks]
-      summary: Verify webhook endpoint
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string }
-      responses:
-        '200': { description: Verified }
-
-  /api-keys:
-    post:
-      tags: [API Keys]
-      summary: Create API key
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [name]
-              properties:
-                name: { type: string }
-                scopes:
-                  type: array
-                  items: { type: string }
-                permissions:
-                  type: array
-                  items: { type: string }
-                rateLimit:
-                  $ref: '#/components/schemas/ApiKey/properties/rateLimit'
-      responses:
-        '201':
-          description: Created
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ApiKey' }
-    get:
-      tags: [API Keys]
-      summary: List my API keys
-      security:
-        - bearerAuth: []
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
       responses:
         '200':
           description: List
@@ -513,27 +285,10 @@ paths:
             application/json:
               schema:
                 type: array
-                items: { $ref: '#/components/schemas/ApiKey' }
-  /api-keys/{id}:
-    get:
-      tags: [API Keys]
-      summary: Get API key by id
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string }
-      responses:
-        '200':
-          description: API key
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ApiKey' }
-    put:
-      tags: [API Keys]
-      summary: Update API key
+                items: { $ref: '#/components/schemas/Comment' }
+    post:
+      tags: [Comments]
+      summary: Create a comment (supports Markdown)
       security:
         - bearerAuth: []
       parameters:
@@ -547,108 +302,144 @@ paths:
           application/json:
             schema:
               type: object
+              required: [content]
               properties:
-                name: { type: string }
-                scopes:
-                  type: array
-                  items: { type: string }
-                permissions:
-                  type: array
-                  items: { type: string }
-                rateLimit:
-                  $ref: '#/components/schemas/ApiKey/properties/rateLimit'
-                status:
-                  type: string
-                  enum: [active, inactive, revoked]
+                content: { type: string }
+                markdown: { type: boolean, default: true }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Comment' }
+  /comments/{commentId}:
+    put:
+      tags: [Comments]
+      summary: Update a comment
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: commentId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                content: { type: string }
+                markdown: { type: boolean }
       responses:
         '200': { description: Updated }
     delete:
-      tags: [API Keys]
-      summary: Delete API key
+      tags: [Comments]
+      summary: Delete a comment
       security:
         - bearerAuth: []
       parameters:
-        - name: id
+        - name: commentId
           in: path
           required: true
           schema: { type: string }
       responses:
         '204': { description: Deleted }
-
-  /api-keys/{id}/revoke:
+  # Markdown testing
+  /markdown/test:
     post:
-      tags: [API Keys]
-      summary: Revoke API key
+      tags: [Markdown]
+      summary: Render markdown for preview/testing
       security:
         - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string }
-      responses:
-        '200': { description: Revoked }
-  /api-keys/{id}/activate:
-    post:
-      tags: [API Keys]
-      summary: Activate API key
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string }
-      responses:
-        '200': { description: Activated }
-  /api-keys/{id}/regenerate:
-    post:
-      tags: [API Keys]
-      summary: Regenerate API key
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string }
-      responses:
-        '200': { description: Regenerated }
-  /api-keys/{id}/rotate:
-    post:
-      tags: [API Keys]
-      summary: Rotate API key
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string }
-      responses:
-        '200': { description: Rotated }
-
-  /api-keys/{id}/usage:
-    get:
-      tags: [API Keys]
-      summary: Get API key usage snapshot
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [input]
+              properties:
+                input: { type: string, description: Markdown string }
+                options:
+                  type: object
+                  properties:
+                    sanitize: { type: boolean, default: true }
+                    allowHTML: { type: boolean, default: false }
       responses:
         '200':
-          description: Usage
+          description: Rendered
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/ApiKey/properties/usage' }
-  /api-keys/{id}/usage/stats:
+              schema: { $ref: '#/components/schemas/MarkdownTestResult' }
+  # Permission switching
+  /users/{id}/role:
+    put:
+      tags: [Permissions, Users]
+      summary: Change a user's role
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role: { type: string, enum: [user, admin] }
+      responses:
+        '200':
+          description: Changed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PermissionChange' }
+  # Audit logs
+  /logs:
     get:
-      tags: [API Keys]
-      summary: Get API key usage stats
+      tags: [Logs]
+      summary: List audit logs
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: actorId
+          in: query
+          schema: { type: string }
+        - name: action
+          in: query
+          schema: { type: string }
+        - name: resourceType
+          in: query
+          schema: { type: string }
+        - name: resourceId
+          in: query
+          schema: { type: string }
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AuditLog' }
+  /logs/{id}:
+    get:
+      tags: [Logs]
+      summary: Get a log entry
       security:
         - bearerAuth: []
       parameters:
@@ -658,6 +449,8 @@ paths:
           schema: { type: string }
       responses:
         '200':
-          description: Stats
+          description: Log entry
           content:
-           
+            application/json:
+              schema: { $ref: '#/components/schemas/AuditLog' }
+  # Webhooks and API Keys are defined above in file
