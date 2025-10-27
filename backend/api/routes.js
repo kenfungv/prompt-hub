@@ -3,10 +3,8 @@ const router = express.Router();
 const promptController = require('./prompt.controller');
 const categoryController = require('./category.controller');
 const tagController = require('./tag.controller');
-
 // Import history routes
 const historyRoutes = require('../routes/history');
-
 // Import auth and user routes
 const authRoutes = require('../routes/auth');
 const userRoutes = require('../routes/user');
@@ -24,7 +22,6 @@ router.get('/prompts', promptController.getPrompts);
 router.get('/prompts/:id', promptController.getPromptById);
 router.put('/prompts/:id', promptController.updatePrompt);
 router.delete('/prompts/:id', promptController.deletePrompt);
-
 // Version control endpoints
 router.post('/prompts/:id/versions', promptController.createNewVersion);
 router.get('/prompts/:id/versions', promptController.getVersionHistory);
@@ -55,6 +52,14 @@ router.post('/tags/:id/increment', tagController.incrementUsage);
 // ============= HISTORY ROUTES =============
 // Mount history routes at /history
 router.use('/history', historyRoutes);
+
+// ============= PLUGIN MARKETPLACE ROUTES =============
+try {
+  const apiPlugins = require('../routes/api_plugins');
+  router.use('/plugins', apiPlugins);
+} catch (e) {
+  console.warn('api_plugins route not available:', e.message);
+}
 
 // Health check endpoint
 router.get('/health', (req, res) => {
