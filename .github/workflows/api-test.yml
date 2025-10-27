@@ -24,6 +24,34 @@ jobs:
         with:
           node-version: '20'
       
+      - name: Install backend dependencies
+        run: |
+          cd backend
+          npm install
+      
+      - name: Start backend server
+        run: |
+          cd backend
+          npm start &
+          echo $! > server.pid
+        env:
+          NODE_ENV: test
+          PORT: 3000
+      
+      - name: Wait for backend to be ready
+        run: |
+          echo "Waiting for backend server to start..."
+          for i in {1..30}; do
+            if curl -s http://localhost:3000/health > /dev/null 2>&1; then
+              echo "Backend server is ready!"
+              exit 0
+            fi
+            echo "Attempt $i: Server not ready yet, waiting..."
+            sleep 2
+          done
+          echo "Backend server failed to start in time"
+          exit 1
+      
       - name: Install Newman (Postman CLI)
         run: npm install -g newman newman-reporter-htmlextra
       
@@ -38,6 +66,13 @@ jobs:
             --bail \
             --color on
         continue-on-error: false
+      
+      - name: Stop backend server
+        if: always()
+        run: |
+          if [ -f backend/server.pid ]; then
+            kill $(cat backend/server.pid) || true
+          fi
       
       - name: Upload test report
         if: always()
