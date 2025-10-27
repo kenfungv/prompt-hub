@@ -32,73 +32,61 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-
       - name: Install backend dependencies
         working-directory: ./backend
         run: |
           npm ci || npm install
-
       - name: Install frontend dependencies
         working-directory: ./frontend
         run: |
           npm ci || npm install
-
       - name: Build backend
         working-directory: ./backend
         run: npm run build --if-present
-
       - name: Build frontend
         working-directory: ./frontend
         run: npm run build
         env:
           NEXT_PUBLIC_API_URL: http://localhost:3001
-
       - name: Run DB migrations
         working-directory: ./backend
         run: npm run db:push --if-present
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/prompt_hub_test
-
       - name: Start backend
         working-directory: ./backend
         run: |
           npm start &
         env:
           PORT: 3001
-
       - name: Wait for backend
         uses: jakejarvis/wait-action@v0.1.1
         with:
           url: http://localhost:3001
           timeout: 120
-
       - name: Start frontend
         working-directory: ./frontend
         run: |
           npm start &
         env:
           PORT: 3000
-
       - name: Install Playwright Browsers
-        working-directory: ./test
+        working-directory: ./e2e-tests
         run: npx playwright install --with-deps
-
       - name: Run E2E tests
-        working-directory: ./test
+        working-directory: ./e2e-tests
         timeout-minutes: 60
         run: npx playwright test
         env:
           BASE_URL: http://localhost:3000
-
       - name: Upload test artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
-          path: test/test-results/playwright-report
+          path: e2e-tests/test-results/playwright-report
