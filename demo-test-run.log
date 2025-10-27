@@ -1,0 +1,6 @@
+[demo-prompt-upload] Uploading 4 prompts to http://localhost:3000 (collection=demo, tags=demo)
+[demo-prompt-upload][ERR] FAIL [1/4] Email Summarizer ->  connect ECONNREFUSED 127.0.0.1:3000
+[demo-prompt-upload][ERR] FAIL [3/4] Product Requirements Generator ->  connect ECONNREFUSED 127.0.0.1:3000
+[demo-prompt-upload][ERR] FAIL [2/4] SQL to Natural Language ->  connect ECONNREFUSED 127.0.0.1:3000
+[demo-prompt-upload][ERR] FAIL [4/4] Customer Support Triage ->  connect ECONNREFUSED 127.0.0.1:3000
+[demo-prompt-upload] Done. Success=0, Failed=4
