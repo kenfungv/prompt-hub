@@ -1,11 +1,11 @@
 // @ts-check
-const { defineConfig } = require('@playwright/test');
+import { defineConfig } from '@playwright/test';
 
 /**
  * Playwright configuration for API testing
  * @see https://playwright.dev/docs/test-configuration
  */
-module.exports = defineConfig({
+export default defineConfig({
   // Test directory
   testDir: './tests',
   
