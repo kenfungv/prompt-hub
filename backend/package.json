@@ -31,7 +31,8 @@
     "serverless-http": "^3.2.0",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
-    "express-session": "^1.18.0"
+    "express-session": "^1.18.0",
+    "bcrypt": "^5.1.1"
   },
   "devDependencies": {
     "nodemon": "^3.0.2",
