@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="zh-HK">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Prompt 模板系統</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; padding: 0; }
+    header { display:flex; gap:12px; align-items:center; padding:12px 16px; border-bottom:1px solid #eee; position:sticky; top:0; background:#fff; z-index:1; }
+    .grid { display:grid; grid-template-columns: 280px 1fr; min-height: calc(100vh - 56px); }
+    aside { border-right:1px solid #eee; padding:12px; }
+    main { padding:16px; }
+    select, input[type="text"], textarea { width:100%; padding:8px; border:1px solid #ddd; border-radius:8px; }
+    button { padding:8px 12px; border:1px solid #ddd; background:#fff; border-radius:8px; cursor:pointer; }
+    button.primary { background:#0d6efd; color:#fff; border-color:#0d6efd; }
+    .toolbar { display:flex; gap:8px; }
+    .tag { display:inline-block; background:#f1f3f5; border:1px solid #e9ecef; padding:2px 8px; border-radius:999px; margin-right:6px; font-size:12px }
+    .card { border:1px solid #eee; border-radius:10px; padding:12px; margin-bottom:12px; background:#fff; }
+    .row { display:flex; gap:8px; align-items:center; }
+  </style>
+</head>
+<body>
+  <header>
+    <h2 style="margin:0">Prompt 模板系統</h2>
+    <div class="toolbar">
+      <button id="btn-import">導入(JSON)</button>
+      <button id="btn-export">導出(JSON)</button>
+      <button id="btn-backup" class="primary">備份到本地</button>
+    </div>
+  </header>
+  <div class="grid">
+    <aside>
+      <h3>分類選單</h3>
+      <select id="industry-filter" multiple size="8">
+        <option value="sales">銷售</option>
+        <option value="customer_service">客服</option>
+        <option value="marketing">營銷</option>
+        <option value="technology">技術/研發</option>
+        <option value="medical">醫療</option>
+        <option value="general">通用</option>
+      </select>
+      <div style="margin-top:12px">
+        <input id="tag-input" type="text" placeholder="新增自訂標籤，回車確認" />
+        <div id="tag-list" style="margin-top:6px"></div>
+      </div>
+      <div style="margin-top:12px" class="toolbar">
+        <button id="btn-load-scraped">一鍵導入爬取模板</button>
+        <button id="btn-clear">清空</button>
+      </div>
+    </aside>
+    <main>
+      <div class="row">
+        <input id="search" type="text" placeholder="搜尋標題或內容..." />
+        <button id="btn-new">新增模板</button>
+      </div>
+      <div id="list" style="margin-top:12px"></div>
+    </main>
+  </div>
+
+  <input id="file-input" type="file" accept="application/json" style="display:none" />
+  <script>
+    const storageKey = 'prompt_templates_v1';
+
+    function loadState() {
+      try { return JSON.parse(localStorage.getItem(storageKey)) || {items:[], tags:[]}; }
+      catch(e){ return {items:[], tags:[]}; }
+    }
+    function saveState(state){ localStorage.setItem(storageKey, JSON.stringify(state)); }
+
+    function uid(){ return 'id_' + Math.random().toString(36).slice(2, 10); }
+
+    function render(){
+      const s = loadState();
+      const q = document.getElementById('search').value.toLowerCase();
+      const selectedIndustries = Array.from(document.getElementById('industry-filter').selectedOptions).map(o=>o.value);
+      const list = document.getElementById('list');
+      list.innerHTML = '';
+      for(const it of s.items){
+        if(selectedIndustries.length && !selectedIndustries.includes(it.industry || 'general')) continue;
+        if(q && !(it.title.toLowerCase().includes(q) || it.prompt.toLowerCase().includes(q))) continue;
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+          <div class="row" style="justify-content:space-between">
+            <strong>${it.title}</strong>
+            <div>
+              <span class="tag">${it.industry||'general'}</span>
+              ${(it.tags||[]).map(t=>`<span class="tag">${t}</span>`).join('')}
+            </div>
+          </div>
+          <textarea rows="6">${it.prompt}</textarea>
+          <div class="toolbar" style="margin-top:8px">
+            <button data-action="copy">複製</button>
+            <button data-action="tag">加標籤</button>
+            <button data-action="delete">刪除</button>
+          </div>`;
+        card.querySelector('[data-action="copy"]').onclick = () => {
+          navigator.clipboard.writeText(card.querySelector('textarea').value);
+        };
+        card.querySelector('[data-action="tag"]').onclick = () => {
+          const tag = prompt('輸入標籤');
+          if(!tag) return;
+          it.tags = Array.from(new Set([...(it.tags||[]), tag]));
+          saveState(s); render();
+        };
+        card.querySelector('[data-action="delete"]').onclick = () => {
+          if(confirm('確認刪除?')){
+            const idx = s.items.findIndex(x=>x.id===it.id);
+            if(idx>-1){ s.items.splice(idx,1); saveState(s); render(); }
+          }
+        };
+        list.appendChild(card);
+      }
+    }
+
+    function importJSON(obj){
+      const s = loadState();
+      if(Array.isArray(obj.items)) s.items = obj.items;
+      if(Array.isArray(obj.tags)) s.tags = obj.tags;
+      saveState(s); render();
+    }
+
+    document.getElementById('btn-new').onclick = () => {
+      const s = loadState();
+      s.items.unshift({ id: uid(), title: '新模板', prompt: '', industry: 'general', tags: [] });
+      saveState(s); render();
+    };
+
+    document.getElementById('btn-clear').onclick = () => { if(confirm('清空所有模板?')){ saveState({items:[], tags:[]}); render(); } };
+    document.getElementById('search').oninput = render;
+
+    document.getElementById('tag-input').addEventListener('keydown', (e)=>{
+      if(e.key==='Enter'){
+        const v = e.target.value.trim(); if(!v) return;
+        const s = loadState(); s.tags = Array.from(new Set([...(s.tags||[]), v])); saveState(s);
+        const span = document.createElement('span'); span.className='tag'; span.textContent=v; document.getElementById('tag-list').appendChild(span);
+        e.target.value='';
+      }
+    });
+
+    document.getElementById('btn-export').onclick = () => {
+      const s = loadState();
+      const blob = new Blob([JSON.stringify(s, null, 2)], {type:'application/json'});
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'prompt_templates_backup.json'; a.click();
+    };
+
+    document.getElementById('btn-import').onclick = () => document.getElementById('file-input').click();
+    document.getElementById('file-input').onchange = async (e) => {
+      const f = e.target.files[0]; if(!f) return; const text = await f.text();
+      try { importJSON(JSON.parse(text)); } catch(err){ alert('JSON 解析失敗'); }
+    };
+
+    document.getElementById('btn-backup').onclick = () => {
+      const s = loadState(); localStorage.setItem(storageKey+':backup', JSON.stringify(s)); alert('已備份到本地瀏覽器');
+    };
+
+    async function loadScraped(){
+      try {
+        const res = await fetch('../../data/prompts/industry_prompts.json', {cache:'no-store'});
+        const obj = await res.json();
+        const s = loadState();
+        const map = {
+          sales: 'sales', customer_service: 'customer_service', marketing: 'marketing', technology: 'technology', medical: 'medical', general: 'general'
+        };
+        for(const [k, arr] of Object.entries(obj)){
+          for(const it of arr){
+            s.items.push({ id: uid(), title: it.title || '模板', prompt: it.prompt || '', industry: map[k] || 'general', tags: [] });
+          }
+        }
+        saveState(s); render();
+      } catch(e){ alert('導入爬取模板失敗'); }
+    }
+
+    document.getElementById('btn-load-scraped').onclick = loadScraped;
+
+    // initial render
+    render();
+  </script>
+</body>
+</html>
