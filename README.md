@@ -1,39 +1,59 @@
-# prompt-hub API Documentation
+# prompt-hub API & Plugin Marketplace
 
-This document lists backend models, REST API routes, and includes seed instructions.
+## New: API & Plugin Marketplace (Prompt/Agent isolation and integrations)
+This release adds an API & Plugin Marketplace enabling prompts/agents to be isolated as microservices, managed via APIs, and listed in a marketplace with review and transactions.
 
-## New: Security Review (Prompt Red Team/Filter)
+### Frontend: API & Plugin Management
+- Page: frontend/pages/APIPlugins.tsx
+- Features:
+  - CRUD for API Plugins: name, slug, description, version, scopes, categories
+  - Integration targets: Zapier, Notion, Slack, Webhook, Custom
+  - Webhook URL for exposing prompts/agents as microservices (external call-in)
+  - Listing controls: draft, submitted, approved, rejected; private listing toggle
+  - Pricing (USD), installs, rating display
+  - Actions: Submit for review, Refund, Delete
 
-A new security review module provides batch and automated prompt security scanning with severity grading and remediation suggestions.
+### Backend: Routes and Model
+- Routes: backend/routes/api_plugins.js
+  - GET /api/plugins                List plugins
+  - POST /api/plugins               Create plugin
+  - PUT /api/plugins/:id            Update plugin
+  - DELETE /api/plugins/:id         Delete plugin
+  - POST /api/plugins/:id/submit    Submit for review
+  - POST /api/plugins/:id/review    Approve/Reject (admin)
+  - POST /api/plugins/:id/refund    Refund simulation
+  - GET /api/plugins/connect/:prov  Third-party connect stub (zapier|notion|slack)
+  - POST /api/plugins/invoke/:slug  Invoke prompt/agent microservice (echo simulation)
+- Central API mounting: backend/api/routes.js mounts /api/plugins
+- Optional model: backend/models/APIPlugin.js (Mongoose schema) for persistence
 
-### Backend: backend/services/filter.ts
-- SecurityFilterService with:
-  - Sensitive word categorization (hate speech, violence, PII, spam)
-  - Prompt injection detection (override/disregard instructions, system manipulation)
-  - Privacy leak detection (SSN, credit cards, passwords, API keys, emails)
-  - Basic toxicity analysis
-  - Batch checking API and severity-based scoring
-  - Recommendations generation
+### Third-party Integrations
+- Stubs for Zapier/Notion/Slack connect flows prepared under /api/plugins/connect/:provider
+- Next: OAuth apps, token storage, per-scope permissions; Notion workspace, Slack bot installation
 
-Example usage:
-```
-import { securityFilter } from './backend/services/filter';
-const result = await securityFilter.checkPrompt('example prompt');
-```
+### Marketplace lifecycle and policies
+- States: draft -> submitted -> approved/rejected
+- Private listing: only accessible via direct install keys
+- Review guidelines: security, permission scopes, quality checks, audit readiness
+- Transactions: refund endpoint stub; payment provider integration to be added
 
-### Frontend: frontend/pages/SecurityCheck.tsx
-- Security Check page provides:
-  - Batch input and Auto mode scanning
-  - Severity levels: CRITICAL, HIGH, MEDIUM, LOW, SAFE
-  - Score and detailed issues list
-  - Remediation suggestions and JSON export
+### Prompt/Agent isolation and sandboxing
+- Expose selected prompts/agents via /api/plugins/invoke/:slug
+- Future: per-plugin runtime policies, rate limits, API keys, audit logs, QA sandbox runs
 
-### Integration Plan
-- Wire backend API endpoint to replace mock in SecurityCheck.tsx
-- Gate prompt publishing with security pass threshold
-- Add audit logs for each security check run
+### How to run
+- Backend: ensure backend/server.js runs with app.use('/api', require('./api/routes'))
+- Frontend: navigate to /APIPlugins to manage plugins
 
-### Roadmap
-- Integrate external NLP safety frameworks/providers (e.g., Perspective API, OpenAI Moderation, Azure Content Safety)
-- Add multilingual sensitive lexicons and contextual classification
-- Extend to output red-team test cases and replay harness
+### Changelog
+- feat(frontend): add API & Plugin Marketplace page
+- feat(backend): add API plugins routes and invoke endpoint
+- chore(models): add optional Mongoose schema for APIPlugin
+- feat(backend): mount /api/plugins under central API router
+
+### Roadmap next
+- OAuth flows for Zapier/Notion/Slack with scopes and revocation
+- Payment integration and entitlements (trial, subscription, one-time)
+- Quality gates: automated tests, red-team checks, performance SLOs
+- Audit: per-call logging, review workflow, versioned releases
+- Ecosystem: publish/install flow, ratings and reviews, vendor profiles
