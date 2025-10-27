@@ -9,6 +9,7 @@ on:
     branches:
       - main
       - develop
+  workflow_dispatch:
 
 jobs:
   api-test:
@@ -21,7 +22,7 @@ jobs:
         ports:
           - 27017:27017
         options: >-
-          --health-cmd "mongosh --eval 'db.adminCommand({ping: 1})'"
+          --health-cmd "mongosh --eval 'db.adminCommand({ping: 1})'"  
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -40,44 +41,33 @@ jobs:
           cd backend
           npm install
       
+      - name: Create backend .env file
+        run: |
+          cd backend
+          echo "NODE_ENV=test" > .env
+          echo "MONGODB_URI=mongodb://localhost:27017/test_db" >> .env
+          echo "JWT_SECRET=test-secret-key-for-ci" >> .env
+          echo "PORT=3000" >> .env
+      
       - name: Start backend server
         run: |
           cd backend
           npm start &
           echo $! > server.pid
-        env:
-          NODE_ENV: test
-          PORT: 3000
-          MONGODB_URI: mongodb://localhost:27017/prompt-hub-test
       
       - name: Wait for backend to be ready
         run: |
-          echo "Waiting for backend server to start..."
-          for i in {1..30}; do
-            if curl -s http://localhost:3000/api/health > /dev/null 2>&1; then
-              echo "Backend server is ready!"
-              exit 0
-            fi
-            echo "Attempt $i: Server not ready yet, waiting..."
-            sleep 2
-          done
-          echo "Backend server failed to start in time"
-          exit 1
+          timeout 60 bash -c 'until curl -f http://localhost:3000/health; do sleep 2; done'
       
-      - name: Install Newman (Postman CLI)
-        run: npm install -g newman newman-reporter-htmlextra
-      
-      - name: Create reports directory
-        run: mkdir -p reports
-      
-      - name: Run Postman Collection
+      - name: Install API test dependencies
         run: |
-          newman run backend/postman/collection.json \
-            --reporters cli,htmlextra \
-            --reporter-htmlextra-export reports/api-test-report.html \
-            --bail \
-            --color on
-        continue-on-error: false
+          cd api-tests
+          npm install
+      
+      - name: Run API tests
+        run: |
+          cd api-tests
+          npm test
       
       - name: Stop backend server
         if: always()
@@ -86,20 +76,10 @@ jobs:
             kill $(cat backend/server.pid) || true
           fi
       
-      - name: Upload test report
+      - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: api-test-report
-          path: reports/api-test-report.html
-          retention-days: 30
-      
-      - name: Check test results
-        if: failure()
-        run: |
-          echo "❌ API tests failed. Please check the test report for details."
-          exit 1
-      
-      - name: Success notification
-        if: success()
-        run: echo "✅ All API tests passed successfully!"
+          name: api-test-results
+          path: api-tests/test-results
+          retention-days: 7
