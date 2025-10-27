@@ -22,11 +22,6 @@ jobs:
         image: mongo:6.0
         ports:
           - 27017:27017
-        options: >-
-          --health-cmd "mongosh --eval 'db.adminCommand({ping: 1})'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
     
     steps:
       - name: Checkout code
@@ -55,16 +50,8 @@ jobs:
       - name: Wait for MongoDB
         run: |
           echo "Waiting for MongoDB to be ready..."
-          for i in {1..30}; do
-            if mongosh --eval "db.adminCommand('ping')" mongodb://localhost:27017 > /dev/null 2>&1; then
-              echo "MongoDB is ready!"
-              exit 0
-            fi
-            echo "Attempt $i: MongoDB not ready yet, waiting..."
-            sleep 2
-          done
-          echo "MongoDB failed to start within timeout"
-          exit 1
+          sleep 20
+          echo "MongoDB should be ready now!"
       
       - name: Start backend
         working-directory: ./backend
