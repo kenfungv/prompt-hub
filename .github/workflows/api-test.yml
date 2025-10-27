@@ -1,5 +1,4 @@
 name: API Testing
-
 on:
   push:
     branches:
@@ -10,7 +9,6 @@ on:
       - main
       - develop
   workflow_dispatch:
-
 jobs:
   api-test:
     name: Run API Tests
@@ -42,8 +40,8 @@ jobs:
         run: |
           npm ci || npm install
       
-      - name: Install e2e-tests dependencies
-        working-directory: ./e2e-tests
+      - name: Install api-tests dependencies
+        working-directory: ./api-tests
         run: |
           npm ci || npm install
       
@@ -62,13 +60,21 @@ jobs:
           NODE_ENV: test
       
       - name: Wait for backend
-        uses: jakejarvis/wait-action@v0.1.1
-        with:
-          url: http://localhost:3001
-          timeout: 120
+        run: |
+          echo "Waiting for backend to be ready..."
+          for i in {1..30}; do
+            if curl -f http://localhost:3001/health > /dev/null 2>&1 || curl -f http://localhost:3001 > /dev/null 2>&1; then
+              echo "Backend is ready!"
+              exit 0
+            fi
+            echo "Attempt $i: Backend not ready yet, waiting..."
+            sleep 2
+          done
+          echo "Backend failed to start within 60 seconds"
+          exit 1
       
       - name: Run API tests
-        working-directory: ./e2e-tests
+        working-directory: ./api-tests
         run: |
           npx playwright test
         env:
@@ -79,4 +85,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: api-test-results
-          path: e2e-tests/test-results
+          path: api-tests/test-results
