@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
-import dynamic from 'next/dynamic';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
@@ -24,59 +23,47 @@ export type Prompt = {
   views?: number;
   visibility?: 'public' | 'private';
   updatedAt?: string;
+  tier?: 'free' | 'pro' | 'enterprise';
 };
 
-const CATEGORIES = ['all','Writing','Coding','Marketing','Business','Education','Creative','Analytics','Other'];
-const PAGE_SIZE_OPTIONS = [12, 24, 48];
+const CATEGORIES = ['all', 'Writing', 'Coding', 'Marketing', 'Business', 'Education', 'Creative', 'Analytics', 'Other'] as const;
+const PAGE_SIZE_OPTIONS = [12, 24, 48] as const;
 
 const Marketplace: React.FC = () => {
+  // data
   const [prompts, setPrompts] = useState<Prompt[]>([]);
   const [filtered, setFiltered] = useState<Prompt[]>([]);
+
+  // query state
   const [search, setSearch] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedCategory, setSelectedCategory] = useState<(typeof CATEGORIES)[number]>('all');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [allTags, setAllTags] = useState<string[]>([]);
+  const [visibility, setVisibility] = useState<'all' | 'public' | 'private'>('all');
+  const [tier, setTier] = useState<'all' | 'free' | 'pro' | 'enterprise'>('all');
+
+  // ui state
+  const [sortBy, setSortBy] = useState<'updated' | 'popular' | 'rating' | 'priceAsc' | 'priceDesc'>('updated');
+  const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(PAGE_SIZE_OPTIONS[0]);
+  const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // sorting
-  const [sortKey, setSortKey] = useState<'trending'|'newest'|'popular'|'rating'|'price'>('trending');
-  const [sortOrder, setSortOrder] = useState<'asc'|'desc'>('desc');
+  // dnd
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
-  // pagination
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState<number>(PAGE_SIZE_OPTIONS[0]);
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-
-  // dnd-kit sensors
-  const sensors = useSensors(useSensor(PointerSensor));
-
-  // Fetch prompts
+  // fetch
   useEffect(() => {
     const fetchPrompts = async () => {
-      setIsLoading(true);
-      setError(null);
       try {
+        setIsLoading(true);
+        // Replace with real API call
         const res = await fetch('/api/prompts');
-        if (!res.ok) throw new Error('Failed to fetch prompts');
+        if (!res.ok) throw new Error('Failed to load prompts');
         const data: Prompt[] = await res.json();
-        const normalized = (data || []).map(p => ({
-          ...p,
-          tags: Array.isArray(p.tags) ? p.tags : [],
-          rating: Number(p.rating || (p as any).avgRating || 0),
-          ratingsCount: Number(p.ratingsCount || (p as any).reviews?.length || 0),
-          views: Number(p.views || 0),
-          visibility: (p.visibility as any) || 'public',
-          format: (p.format as any) || (p.content?.includes('```') ? 'markdown' : 'text'),
-        }));
-        setPrompts(normalized);
-        setFiltered(normalized);
-        const tagSet = new Set<string>();
-        normalized.forEach(pr => pr.tags.forEach(t => tagSet.add(t)));
-        setAllTags(Array.from(tagSet).sort());
+        setPrompts(data);
+        setFiltered(data);
       } catch (e: any) {
-        setError(e.message || 'Unknown error');
-        console.error(e);
+        setError(e?.message || 'Unknown error');
       } finally {
         setIsLoading(false);
       }
@@ -84,163 +71,218 @@ const Marketplace: React.FC = () => {
     fetchPrompts();
   }, []);
 
-  // Filtering + sorting
-  const applyFilterSort = useMemo(() => {
-    const lower = search.toLowerCase();
-    const result = prompts.filter(p => {
-      const inCategory = selectedCategory === 'all' || (p.category || 'Other') === selectedCategory;
-      const inTags = selectedTags.length === 0 || selectedTags.every(t => p.tags.includes(t));
-      const inText = !lower || `${p.title} ${p.description ?? ''} ${p.tags.join(' ')}`.toLowerCase().includes(lower);
-      return inCategory && inTags && inText;
-    }).sort((a, b) => {
-      const dir = sortOrder === 'asc' ? 1 : -1;
-      switch (sortKey) {
-        case 'price': return ((a.price||0) - (b.price||0)) * dir;
-        case 'rating': return ((a.rating||0) - (b.rating||0)) * dir;
-        case 'popular': return ((a.ratingsCount||0) - (b.ratingsCount||0)) * dir;
-        case 'newest': return (new Date(a.updatedAt||0).getTime() - new Date(b.updatedAt||0).getTime()) * dir;
-        case 'trending': default:
-          return (((a.views||0) + (a.ratingsCount||0)*10 + (a.rating||0)*20) - ((b.views||0) + (b.ratingsCount||0)*10 + (b.rating||0)*20)) * dir;
+  // derived
+  const allTags = useMemo(() => {
+    const s = new Set<string>();
+    prompts.forEach(p => (p.tags || []).forEach(t => s.add(t)));
+    return Array.from(s).sort();
+  }, [prompts]);
+
+  // filter + sort
+  useEffect(() => {
+    let list = [...prompts];
+    // search
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(p =>
+        p.title.toLowerCase().includes(q) ||
+        (p.description || '').toLowerCase().includes(q) ||
+        (p.content || '').toLowerCase().includes(q)
+      );
+    }
+    // category
+    if (selectedCategory !== 'all') {
+      list = list.filter(p => (p.category || 'Other') === selectedCategory);
+    }
+    // tags
+    if (selectedTags.length) {
+      list = list.filter(p => selectedTags.every(t => (p.tags || []).includes(t)));
+    }
+    // visibility
+    if (visibility !== 'all') {
+      list = list.filter(p => (p.visibility || 'public') === visibility);
+    }
+    // tier
+    if (tier !== 'all') {
+      list = list.filter(p => (p.tier || 'free') === tier);
+    }
+    // sort
+    list.sort((a, b) => {
+      switch (sortBy) {
+        case 'popular':
+          return (b.views || 0) - (a.views || 0);
+        case 'rating':
+          return (b.rating || 0) - (a.rating || 0);
+        case 'priceAsc':
+          return (a.price || 0) - (b.price || 0);
+        case 'priceDesc':
+          return (b.price || 0) - (a.price || 0);
+        case 'updated':
+        default:
+          return new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime();
       }
     });
-    return result;
-  }, [prompts, search, selectedCategory, selectedTags, sortKey, sortOrder]);
 
-  useEffect(() => {
-    setFiltered(applyFilterSort);
+    setFiltered(list);
     setPage(1);
-  }, [applyFilterSort]);
+  }, [prompts, search, selectedCategory, selectedTags, visibility, tier, sortBy]);
 
-  const clearAllFilters = () => {
-    setSearch('');
-    setSelectedCategory('all');
-    setSelectedTags([]);
-  };
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPageItems = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, page, pageSize]);
 
-  const toggleTag = (tag: string) => {
-    setSelectedTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
-  };
-
-  // drag & drop reordering within current page only
-  const currentPageItems = useMemo(() => filtered.slice((page-1)*pageSize, page*pageSize), [filtered, page, pageSize]);
+  // dnd handlers
   const ids = currentPageItems.map(p => p._id);
-
-  const handleDragEnd = (event: any) => {
+  function handleDragEnd(event: any) {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
     const oldIndex = ids.indexOf(active.id);
     const newIndex = ids.indexOf(over.id);
-    const newPageItems = arrayMove(currentPageItems, oldIndex, newIndex);
-    // merge reordered page items back into filtered
-    const start = (page-1)*pageSize;
-    const updated = [...filtered];
-    newPageItems.forEach((item, i) => { updated[start + i] = item; });
-    setFiltered(updated);
+    if (oldIndex === -1 || newIndex === -1) return;
+    const pageCloned = arrayMove(currentPageItems, oldIndex, newIndex);
+    // apply back to filtered + prompts maintaining other pages order
+    const newFiltered = [...filtered];
+    const start = (page - 1) * pageSize;
+    for (let i = 0; i < pageCloned.length; i++) newFiltered[start + i] = pageCloned[i];
+    setFiltered(newFiltered);
+  }
+
+  // helpers
+  const toggleTag = (tag: string) => {
+    setSelectedTags(prev => (prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]));
+  };
+  const clearAllFilters = () => {
+    setSearch('');
+    setSelectedCategory('all');
+    setSelectedTags([]);
+    setVisibility('all');
+    setTier('all');
+    setSortBy('updated');
+    setPage(1);
   };
 
   return (
-    <div className="marketplace-page">
+    <div className="marketplace">
+      {/* Sidebar */}
       <aside className="sidebar">
-        <div className="sidebar-section">
-          <div className="sidebar-title">分類</div>
-          <ul className="category-list">
-            {CATEGORIES.map(cat => (
-              <li key={cat}>
-                <button className={`category-item ${selectedCategory===cat ? 'active' : ''}`} onClick={() => setSelectedCategory(cat)}>
-                  {cat}
-                </button>
-              </li>
-            ))}
-          </ul>
+        <div className="search-bar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15.5 15.5L21 21" stroke="#9aa4b2" strokeWidth="2" strokeLinecap="round"/><circle cx="10" cy="10" r="6" stroke="#9aa4b2" strokeWidth="2"/></svg>
+          <input className="search-input" value={search} onChange={e => setSearch(e.target.value)} placeholder="快速搜尋..." />
         </div>
-        <div className="sidebar-section">
-          <div className="sidebar-title">標籤</div>
-          <div className="tag-cloud">
-            {allTags.slice(0, 50).map(tag => (
-              <button key={tag} className={`tag-chip ${selectedTags.includes(tag) ? 'selected' : ''}`} onClick={() => toggleTag(tag)}>
-                #{tag}
-              </button>
-            ))}
-          </div>
+
+        <h3>分類</h3>
+        <div className="category-list">
+          {CATEGORIES.map(c => (
+            <button key={c} className={`category-chip ${selectedCategory === c ? 'active' : ''}`} onClick={() => setSelectedCategory(c)}>
+              {c}
+            </button>
+          ))}
+        </div>
+
+        <h3>標籤</h3>
+        <div className="tag-list">
+          {allTags.map(t => (
+            <button key={t} className={`tag-chip ${selectedTags.includes(t) ? 'active' : ''}`} onClick={() => toggleTag(t)}>
+              #{t}
+            </button>
+          ))}
+        </div>
+
+        <h3>可見性 / 權限</h3>
+        <div className="filters">
+          <select className="select" value={visibility} onChange={e => setVisibility(e.target.value as any)}>
+            <option value="all">全部</option>
+            <option value="public">公共</option>
+            <option value="private">私人</option>
+          </select>
+          <select className="select" value={tier} onChange={e => setTier(e.target.value as any)}>
+            <option value="all">全部權限</option>
+            <option value="free">免費</option>
+            <option value="pro">專業</option>
+            <option value="enterprise">企業</option>
+          </select>
         </div>
       </aside>
 
-      <section className="main">
+      {/* Content */}
+      <section className="content">
         <div className="toolbar">
-          <div className="search-box">
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="搜尋標題、描述或標籤..."
-              aria-label="search prompts"
-            />
-          </div>
-          <div className="sort-controls">
-            <select value={sortKey} onChange={e => setSortKey(e.target.value as any)}>
-              <option value="trending">趨勢</option>
-              <option value="newest">最新</option>
-              <option value="popular">最受關注</option>
-              <option value="rating">評分</option>
-              <option value="price">價格</option>
-            </select>
-            {sortKey !== 'trending' && (
-              <select aria-label="sort order" value={sortOrder} onChange={e => setSortOrder(e.target.value as any)}>
-                <option value="desc">由高到低</option>
-                <option value="asc">由低到高</option>
-              </select>
+          <div className="active-filters">
+            {(search || selectedCategory !== 'all' || selectedTags.length > 0) && (
+              <>
+                {search && (
+                  <span className="filter-chip">關鍵字: "{search}" <button onClick={() => setSearch('')}>✕</button></span>
+                )}
+                {selectedCategory !== 'all' && (
+                  <span className="filter-chip">分類: {selectedCategory} <button onClick={() => setSelectedCategory('all')}>✕</button></span>
+                )}
+                {selectedTags.map(tag => (
+                  <span key={tag} className="filter-chip">標籤: {tag} <button onClick={() => toggleTag(tag)}>✕</button></span>
+                ))}
+              </>
             )}
-            <select value={pageSize} onChange={e => setPageSize(Number(e.target.value))}>
-              {PAGE_SIZE_OPTIONS.map(n => <option key={n} value={n}>{n}/頁</option>)}
+          </div>
+          <button className="clear-all-btn" onClick={clearAllFilters}>清除全部篩選</button>
+
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginLeft: 'auto' }}>
+            <select className="select" value={sortBy} onChange={e => setSortBy(e.target.value as any)}>
+              <option value="updated">最近更新</option>
+              <option value="popular">最熱門</option>
+              <option value="rating">最高評分</option>
+              <option value="priceAsc">價格（低到高）</option>
+              <option value="priceDesc">價格（高到低）</option>
+            </select>
+            <select className="select" value={pageSize} onChange={e => setPageSize(parseInt(e.target.value))}>
+              {PAGE_SIZE_OPTIONS.map(s => (
+                <option key={s} value={s}>{s}/頁</option>
+              ))}
             </select>
           </div>
         </div>
 
-        {(search || selectedCategory!=='all' || selectedTags.length>0) && (
-          <div className="active-filters">
-            {search && <span className="filter-chip">關鍵字: "{search}" <button onClick={() => setSearch('')}>✕</button></span>}
-            {selectedCategory!=='all' && <span className="filter-chip">分類: {selectedCategory} <button onClick={() => setSelectedCategory('all')}>✕</button></span>}
-            {selectedTags.map(tag => (
-              <span key={tag} className="filter-chip">標籤: {tag} <button onClick={() => toggleTag(tag)}>✕</button></span>
-            ))}
-            <button className="clear-all-btn" onClick={clearAllFilters}>清除全部篩選</button>
-          </div>
+        {isLoading && (
+          <div className="loading-state"><div className="spinner" />載入 Prompt 中...</div>
+        )}
+        {error && (
+          <div className="error-state">錯誤：{error} <button onClick={() => location.reload()}>重試</button></div>
+        )}
+        {!isLoading && !error && filtered.length === 0 && (
+          <div className="empty-state"><div className="empty-icon">📭</div>未找到 Prompt，請調整搜尋或篩選 <button className="clear-all-btn" onClick={clearAllFilters}>清除所有篩選</button></div>
         )}
 
-        {isLoading && <div className="loading-state"><div className="spinner" />載入 Prompt 中...</div>}
-        {error && <div className="error-state">錯誤：{error} <button onClick={() => location.reload()}>重試</button></div>}
-        {!isLoading && !error && filtered.length===0 && (
-          <div className="empty-state"><div className="empty-icon">📭</div>未找到 Prompt/ 請嘗試調整搜尋或篩選<button className="clear-all-btn" onClick={clearAllFilters}>清除所有篩選</button></div>
-        )}
-
-        {!isLoading && !error && filtered.length>0 && (
+        {!isLoading && !error && filtered.length > 0 && (
           <>
-            <div className="results-info">顯示 {Math.min(page*pageSize, filtered.length)} / {filtered.length} 個 Prompt</div>
+            <div className="results-info">顯示 {Math.min(page * pageSize, filtered.length)} / {filtered.length} 個 Prompt</div>
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
               <SortableContext items={ids} strategy={rectSortingStrategy}>
                 <div className="prompts-grid">
                   {currentPageItems.map(p => (
                     <SortableItem key={p._id} id={p._id}>
-                      <PromptCard prompt={p} renderContent={(content?: string, format?: string) => (
-                        format === 'markdown' ? (
-                          <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
-                            {content || ''}
-                          </ReactMarkdown>
-                        ) : (
-                          <pre className="prompt-content-pre">{content}</pre>
-                        )
-                      )} />
+                      <PromptCard
+                        prompt={p}
+                        renderContent={(content?: string, format?: string) => (
+                          format === 'markdown' ? (
+                            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+                              {content || ''}
+                            </ReactMarkdown>
+                          ) : (
+                            <pre className="prompt-content-pre">{content}</pre>
+                          )
+                        )}
+                      />
                     </SortableItem>
                   ))}
                 </div>
               </SortableContext>
             </DndContext>
-
             <div className="pagination">
-              <button disabled={page===1} onClick={() => setPage(1)}>«</button>
-              <button disabled={page===1} onClick={() => setPage(p => Math.max(1, p-1))}>‹</button>
+              <button disabled={page === 1} onClick={() => setPage(1)}>«</button>
+              <button disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))}>‹</button>
               <span>第 {page} / {totalPages} 頁</span>
-              <button disabled={page===totalPages} onClick={() => setPage(p => Math.min(totalPages, p+1))}>›</button>
-              <button disabled={page===totalPages} onClick={() => setPage(totalPages)}>»</button>
+              <button disabled={page === totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>›</button>
+              <button disabled={page === totalPages} onClick={() => setPage(totalPages)}>»</button>
             </div>
           </>
         )}
