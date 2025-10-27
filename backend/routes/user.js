@@ -34,6 +34,10 @@ router.get('/profile', authenticate, getProfile);
 // PUT /api/users/change-password
 router.put('/change-password', authenticate, changePassword);
 
+// Upgrade user tier/role
+// POST /api/users/upgrade
+router.post('/upgrade', authenticate, updateUserRoleTier);
+
 // ===== User CRUD Routes (Admin) =====
 // Create a new user
 // POST /api/users
