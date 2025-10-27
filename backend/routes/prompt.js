@@ -84,17 +84,38 @@ router.get('/user/bookmarks', promptController.getBookmarkedPrompts);
 router.patch('/:id/publish', promptController.publishPrompt);
 router.patch('/:id/unpublish', promptController.unpublishPrompt);
 
-// ==================== Fork & Collaboration API ====================
+// ==================== Fork & Collaboration API (Enhanced) ====================
 // Fork a prompt - Create a copy of an existing prompt
-// Body: { title, description } (optional overrides)
+// Body: { title, description, content, tags, price, forkReason, modifications }
 router.post('/:id/fork', promptController.forkPrompt);
 
-// Get forks of a prompt
-// Query parameters: page, limit
+// Get all forks of a prompt (direct children)
+// Query parameters: page, limit, sortBy (createdAt, forkCount, views)
 router.get('/:id/forks', promptController.getPromptForks);
 
-// Get fork history/lineage of a prompt
+// Get fork tree (complete fork hierarchy)
+// Returns nested tree structure showing all descendants
+router.get('/:id/fork-tree', promptController.getForkTree);
+
+// Get fork chain/lineage (ancestry path from original to current)
+// Returns array of ancestors from root to current prompt
+router.get('/:id/fork-chain', promptController.getForkChain);
+
+// Get original prompt (root of fork chain)
+router.get('/:id/original', promptController.getOriginalPrompt);
+
+// Get fork statistics
+// Returns: total forks, fork depth, most popular fork branch
+router.get('/:id/fork-stats', promptController.getForkStats);
+
+// Get fork history/lineage (legacy endpoint, kept for backward compatibility)
 router.get('/:id/fork-history', promptController.getForkHistory);
+
+// Compare current prompt with its parent fork
+router.get('/:id/compare-parent', promptController.compareForkWithParent);
+
+// Compare current prompt with original
+router.get('/:id/compare-original', promptController.compareForkWithOriginal);
 
 // ==================== Rating & Review System API ====================
 // Add a review/comment to a prompt
@@ -164,21 +185,25 @@ router.get('/user/usage-history', promptController.getUserUsageHistory);
 // Query parameters: format (csv, json), startDate, endDate
 router.get('/:id/export-logs', promptController.exportUsageLogs);
 
-// ==================== Version Control API ====================
+// ==================== Version Control API (Enhanced) ====================
 // Create a new version of a prompt
-// Body: { content, versionNotes, changeDescription }
+// Body: { content, description, changeLog }
 router.post('/:id/versions', promptController.createVersion);
 
 // Get all versions of a prompt
 router.get('/:id/versions', promptController.getVersions);
 
 // Get a specific version
-router.get('/:id/versions/:versionId', promptController.getVersion);
+router.get('/:id/versions/:versionNumber', promptController.getVersion);
+
+// Get version diff/changes
+// Returns the diff/changelog for a specific version
+router.get('/:id/versions/:versionNumber/diff', promptController.getVersionDiff);
 
 // Rollback to a previous version
-router.post('/:id/versions/:versionId/rollback', promptController.rollbackVersion);
+router.post('/:id/versions/:versionNumber/rollback', promptController.rollbackVersion);
 
 // Compare two versions
-router.get('/:id/versions/:versionId/compare/:compareVersionId', promptController.compareVersions);
+router.get('/:id/versions/:versionNumber/compare/:compareVersionNumber', promptController.compareVersions);
 
 module.exports = router;
