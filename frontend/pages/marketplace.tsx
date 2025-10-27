@@ -13,7 +13,7 @@ export type Prompt = {
   _id: string;
   title: string;
   description?: string;
-  content?: string; // raw prompt content (can be markdown)
+  content?: string;
   format?: 'markdown' | 'text' | 'json' | 'yaml' | 'other';
   category?: string;
   tags: string[];
@@ -30,263 +30,269 @@ const CATEGORIES = ['all', 'Writing', 'Coding', 'Marketing', 'Business', 'Educat
 const PAGE_SIZE_OPTIONS = [12, 24, 48] as const;
 
 const Marketplace: React.FC = () => {
-  // data
+  // State
   const [prompts, setPrompts] = useState<Prompt[]>([]);
   const [filtered, setFiltered] = useState<Prompt[]>([]);
-
-  // query state
   const [search, setSearch] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<(typeof CATEGORIES)[number]>('all');
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [visibility, setVisibility] = useState<'all' | 'public' | 'private'>('all');
-  const [tier, setTier] = useState<'all' | 'free' | 'pro' | 'enterprise'>('all');
-
-  // ui state
-  const [sortBy, setSortBy] = useState<'updated' | 'popular' | 'rating' | 'priceAsc' | 'priceDesc'>('updated');
-  const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(PAGE_SIZE_OPTIONS[0]);
-  const [page, setPage] = useState(1);
-  const [isLoading, setIsLoading] = useState(false);
+  const [category, setCategory] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<'latest' | 'popular' | 'rating'>('latest');
+  const [pageSize, setPageSize] = useState(12);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // dnd
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  // DnD sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    })
+  );
 
-  // fetch
+  // Fetch prompts
   useEffect(() => {
-    const fetchPrompts = async () => {
-      try {
-        setIsLoading(true);
-        // Replace with real API call
-        const res = await fetch('/api/prompts');
-        if (!res.ok) throw new Error('Failed to load prompts');
-        const data: Prompt[] = await res.json();
-        setPrompts(data);
-        setFiltered(data);
-      } catch (e: any) {
-        setError(e?.message || 'Unknown error');
-      } finally {
-        setIsLoading(false);
-      }
-    };
     fetchPrompts();
   }, []);
 
-  // derived
-  const allTags = useMemo(() => {
-    const s = new Set<string>();
-    prompts.forEach(p => (p.tags || []).forEach(t => s.add(t)));
-    return Array.from(s).sort();
-  }, [prompts]);
+  const fetchPrompts = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/prompts');
+      if (!res.ok) throw new Error('Failed to fetch prompts');
+      const data = await res.json();
+      setPrompts(data);
+      setFiltered(data);
+    } catch (err: any) {
+      setError(err.message || 'Error loading prompts');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  // filter + sort
+  // Filter & sort logic
   useEffect(() => {
-    let list = [...prompts];
-    // search
+    let result = [...prompts];
+
+    // Category filter
+    if (category !== 'all') {
+      result = result.filter((p) => p.category === category);
+    }
+
+    // Search filter
     if (search.trim()) {
       const q = search.toLowerCase();
-      list = list.filter(p =>
-        p.title.toLowerCase().includes(q) ||
-        (p.description || '').toLowerCase().includes(q) ||
-        (p.content || '').toLowerCase().includes(q)
+      result = result.filter(
+        (p) =>
+          p.title.toLowerCase().includes(q) ||
+          (p.description && p.description.toLowerCase().includes(q)) ||
+          p.tags.some((t) => t.toLowerCase().includes(q))
       );
     }
-    // category
-    if (selectedCategory !== 'all') {
-      list = list.filter(p => (p.category || 'Other') === selectedCategory);
-    }
-    // tags
-    if (selectedTags.length) {
-      list = list.filter(p => selectedTags.every(t => (p.tags || []).includes(t)));
-    }
-    // visibility
-    if (visibility !== 'all') {
-      list = list.filter(p => (p.visibility || 'public') === visibility);
-    }
-    // tier
-    if (tier !== 'all') {
-      list = list.filter(p => (p.tier || 'free') === tier);
-    }
-    // sort
-    list.sort((a, b) => {
-      switch (sortBy) {
-        case 'popular':
-          return (b.views || 0) - (a.views || 0);
-        case 'rating':
-          return (b.rating || 0) - (a.rating || 0);
-        case 'priceAsc':
-          return (a.price || 0) - (b.price || 0);
-        case 'priceDesc':
-          return (b.price || 0) - (a.price || 0);
-        case 'updated':
-        default:
-          return new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime();
-      }
-    });
 
-    setFiltered(list);
-    setPage(1);
-  }, [prompts, search, selectedCategory, selectedTags, visibility, tier, sortBy]);
+    // Sort
+    if (sortBy === 'latest') {
+      result.sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
+    } else if (sortBy === 'popular') {
+      result.sort((a, b) => (b.views || 0) - (a.views || 0));
+    } else if (sortBy === 'rating') {
+      result.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+    }
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const currentPageItems = useMemo(() => {
-    const start = (page - 1) * pageSize;
+    setFiltered(result);
+    setCurrentPage(1);
+  }, [prompts, category, search, sortBy]);
+
+  // Pagination
+  const paginatedPrompts = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
     return filtered.slice(start, start + pageSize);
-  }, [filtered, page, pageSize]);
+  }, [filtered, currentPage, pageSize]);
 
-  // dnd handlers
-  const ids = currentPageItems.map(p => p._id);
-  function handleDragEnd(event: any) {
+  const totalPages = Math.ceil(filtered.length / pageSize);
+
+  // DnD handlers
+  const handleDragEnd = (event: any) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    const oldIndex = ids.indexOf(active.id);
-    const newIndex = ids.indexOf(over.id);
-    if (oldIndex === -1 || newIndex === -1) return;
-    const pageCloned = arrayMove(currentPageItems, oldIndex, newIndex);
-    // apply back to filtered + prompts maintaining other pages order
-    const newFiltered = [...filtered];
-    const start = (page - 1) * pageSize;
-    for (let i = 0; i < pageCloned.length; i++) newFiltered[start + i] = pageCloned[i];
-    setFiltered(newFiltered);
-  }
 
-  // helpers
-  const toggleTag = (tag: string) => {
-    setSelectedTags(prev => (prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]));
+    setFiltered((items) => {
+      const oldIndex = items.findIndex((i) => i._id === active.id);
+      const newIndex = items.findIndex((i) => i._id === over.id);
+      return arrayMove(items, oldIndex, newIndex);
+    });
   };
-  const clearAllFilters = () => {
-    setSearch('');
-    setSelectedCategory('all');
-    setSelectedTags([]);
-    setVisibility('all');
-    setTier('all');
-    setSortBy('updated');
-    setPage(1);
+
+  const openDetail = (prompt: Prompt) => {
+    setSelectedPrompt(prompt);
+    setIsDetailOpen(true);
+  };
+
+  const closeDetail = () => {
+    setIsDetailOpen(false);
+    setTimeout(() => setSelectedPrompt(null), 300);
   };
 
   return (
-    <div className="marketplace">
-      {/* Sidebar */}
-      <aside className="sidebar">
-        <div className="search-bar">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15.5 15.5L21 21" stroke="#9aa4b2" strokeWidth="2" strokeLinecap="round"/><circle cx="10" cy="10" r="6" stroke="#9aa4b2" strokeWidth="2"/></svg>
-          <input className="search-input" value={search} onChange={e => setSearch(e.target.value)} placeholder="快速搜尋..." />
-        </div>
+    <div className="marketplace-container">
+      {/* Header */}
+      <header className="marketplace-header">
+        <h1>Prompt Marketplace</h1>
+        <p className="subtitle">Discover and share high-quality AI prompts</p>
+      </header>
 
-        <h3>分類</h3>
-        <div className="category-list">
-          {CATEGORIES.map(c => (
-            <button key={c} className={`category-chip ${selectedCategory === c ? 'active' : ''}`} onClick={() => setSelectedCategory(c)}>
-              {c}
+      {/* Controls */}
+      <div className="marketplace-controls">
+        {/* Search bar */}
+        <div className="search-wrapper">
+          <input
+            ref={searchInputRef}
+            type="text"
+            className="search-input"
+            placeholder="Search prompts..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          {search && (
+            <button className="clear-search" onClick={() => setSearch('')} aria-label="Clear search">
+              ✕
             </button>
-          ))}
+          )}
         </div>
 
-        <h3>標籤</h3>
-        <div className="tag-list">
-          {allTags.map(t => (
-            <button key={t} className={`tag-chip ${selectedTags.includes(t) ? 'active' : ''}`} onClick={() => toggleTag(t)}>
-              #{t}
-            </button>
-          ))}
-        </div>
-
-        <h3>可見性 / 權限</h3>
-        <div className="filters">
-          <select className="select" value={visibility} onChange={e => setVisibility(e.target.value as any)}>
-            <option value="all">全部</option>
-            <option value="public">公共</option>
-            <option value="private">私人</option>
-          </select>
-          <select className="select" value={tier} onChange={e => setTier(e.target.value as any)}>
-            <option value="all">全部權限</option>
-            <option value="free">免費</option>
-            <option value="pro">專業</option>
-            <option value="enterprise">企業</option>
+        {/* Category filter */}
+        <div className="filter-group">
+          <label>Category</label>
+          <select value={category} onChange={(e) => setCategory(e.target.value)} className="filter-select">
+            {CATEGORIES.map((cat) => (
+              <option key={cat} value={cat}>
+                {cat === 'all' ? 'All Categories' : cat}
+              </option>
+            ))}
           </select>
         </div>
-      </aside>
 
-      {/* Content */}
-      <section className="content">
-        <div className="toolbar">
-          <div className="active-filters">
-            {(search || selectedCategory !== 'all' || selectedTags.length > 0) && (
-              <>
-                {search && (
-                  <span className="filter-chip">關鍵字: "{search}" <button onClick={() => setSearch('')}>✕</button></span>
-                )}
-                {selectedCategory !== 'all' && (
-                  <span className="filter-chip">分類: {selectedCategory} <button onClick={() => setSelectedCategory('all')}>✕</button></span>
-                )}
-                {selectedTags.map(tag => (
-                  <span key={tag} className="filter-chip">標籤: {tag} <button onClick={() => toggleTag(tag)}>✕</button></span>
-                ))}
-              </>
-            )}
-          </div>
-          <button className="clear-all-btn" onClick={clearAllFilters}>清除全部篩選</button>
+        {/* Sort */}
+        <div className="filter-group">
+          <label>Sort by</label>
+          <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} className="filter-select">
+            <option value="latest">Latest</option>
+            <option value="popular">Most Popular</option>
+            <option value="rating">Highest Rated</option>
+          </select>
+        </div>
 
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginLeft: 'auto' }}>
-            <select className="select" value={sortBy} onChange={e => setSortBy(e.target.value as any)}>
-              <option value="updated">最近更新</option>
-              <option value="popular">最熱門</option>
-              <option value="rating">最高評分</option>
-              <option value="priceAsc">價格（低到高）</option>
-              <option value="priceDesc">價格（高到低）</option>
-            </select>
-            <select className="select" value={pageSize} onChange={e => setPageSize(parseInt(e.target.value))}>
-              {PAGE_SIZE_OPTIONS.map(s => (
-                <option key={s} value={s}>{s}/頁</option>
+        {/* Page size */}
+        <div className="filter-group">
+          <label>Show</label>
+          <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} className="filter-select">
+            {PAGE_SIZE_OPTIONS.map((size) => (
+              <option key={size} value={size}>
+                {size}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Results info */}
+      <div className="results-info">
+        <span>
+          {filtered.length} {filtered.length === 1 ? 'prompt' : 'prompts'} found
+        </span>
+      </div>
+
+      {/* Loading / Error */}
+      {loading && <div className="loading-state">Loading prompts...</div>}
+      {error && <div className="error-state">{error}</div>}
+
+      {/* Grid */}
+      {!loading && !error && (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={paginatedPrompts.map((p) => p._id)} strategy={rectSortingStrategy}>
+            <div className="prompts-grid">
+              {paginatedPrompts.map((prompt) => (
+                <SortableItem key={prompt._id} id={prompt._id}>
+                  <PromptCard prompt={prompt} onClick={() => openDetail(prompt)} />
+                </SortableItem>
               ))}
-            </select>
-          </div>
+            </div>
+          </SortableContext>
+        </DndContext>
+      )}
+
+      {/* Empty state */}
+      {!loading && !error && filtered.length === 0 && (
+        <div className="empty-state">
+          <p>No prompts found matching your criteria.</p>
+          <button onClick={() => { setSearch(''); setCategory('all'); }} className="reset-btn">
+            Reset filters
+          </button>
         </div>
+      )}
 
-        {isLoading && (
-          <div className="loading-state"><div className="spinner" />載入 Prompt 中...</div>
-        )}
-        {error && (
-          <div className="error-state">錯誤：{error} <button onClick={() => location.reload()}>重試</button></div>
-        )}
-        {!isLoading && !error && filtered.length === 0 && (
-          <div className="empty-state"><div className="empty-icon">📭</div>未找到 Prompt，請調整搜尋或篩選 <button className="clear-all-btn" onClick={clearAllFilters}>清除所有篩選</button></div>
-        )}
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="pagination">
+          <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} className="page-btn">
+            Previous
+          </button>
+          <span className="page-info">
+            Page {currentPage} of {totalPages}
+          </span>
+          <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="page-btn">
+            Next
+          </button>
+        </div>
+      )}
 
-        {!isLoading && !error && filtered.length > 0 && (
-          <>
-            <div className="results-info">顯示 {Math.min(page * pageSize, filtered.length)} / {filtered.length} 個 Prompt</div>
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <SortableContext items={ids} strategy={rectSortingStrategy}>
-                <div className="prompts-grid">
-                  {currentPageItems.map(p => (
-                    <SortableItem key={p._id} id={p._id}>
-                      <PromptCard
-                        prompt={p}
-                        renderContent={(content?: string, format?: string) => (
-                          format === 'markdown' ? (
-                            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
-                              {content || ''}
-                            </ReactMarkdown>
-                          ) : (
-                            <pre className="prompt-content-pre">{content}</pre>
-                          )
-                        )}
-                      />
-                    </SortableItem>
+      {/* Detail modal */}
+      {isDetailOpen && selectedPrompt && (
+        <div className="modal-overlay" onClick={closeDetail}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close" onClick={closeDetail} aria-label="Close">
+              ✕
+            </button>
+            <div className="modal-body">
+              <h2>{selectedPrompt.title}</h2>
+              {selectedPrompt.description && <p className="modal-description">{selectedPrompt.description}</p>}
+              
+              <div className="modal-meta">
+                {selectedPrompt.category && <span className="meta-badge">{selectedPrompt.category}</span>}
+                {selectedPrompt.rating !== undefined && (
+                  <span className="meta-rating">★ {selectedPrompt.rating.toFixed(1)}</span>
+                )}
+                {selectedPrompt.views !== undefined && <span className="meta-views">{selectedPrompt.views} views</span>}
+              </div>
+
+              {selectedPrompt.tags.length > 0 && (
+                <div className="modal-tags">
+                  {selectedPrompt.tags.map((tag) => (
+                    <span key={tag} className="tag">{tag}</span>
                   ))}
                 </div>
-              </SortableContext>
-            </DndContext>
-            <div className="pagination">
-              <button disabled={page === 1} onClick={() => setPage(1)}>«</button>
-              <button disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))}>‹</button>
-              <span>第 {page} / {totalPages} 頁</span>
-              <button disabled={page === totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>›</button>
-              <button disabled={page === totalPages} onClick={() => setPage(totalPages)}>»</button>
+              )}
+
+              {selectedPrompt.content && (
+                <div className="modal-content-area">
+                  <h3>Prompt Content</h3>
+                  {selectedPrompt.format === 'markdown' ? (
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+                      {selectedPrompt.content}
+                    </ReactMarkdown>
+                  ) : (
+                    <pre className="prompt-code">{selectedPrompt.content}</pre>
+                  )}
+                </div>
+              )}
             </div>
-          </>
-        )}
-      </section>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
